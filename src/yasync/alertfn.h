@@ -71,6 +71,10 @@ public:
 	void operator()(std::uintptr_t reason) throw() {
 		obj->wakeUp(&reason);
 	}
+
+	bool operator==(const AlertFn &other) const { return obj == other.obj; }
+	bool operator!=(const AlertFn &other) const { return obj != other.obj; }
+
 protected:
 	RefCntPtr<AbstractAlertFunction> obj;
 
@@ -90,7 +94,13 @@ class Timeout;
  */
 bool sleep(const Timeout &tm, std::uintptr_t *reason = nullptr) ;
 
+///Halts current thread until alert is triggered
+/**
+function is equivalent to sleep(nullptr) but contains less code.
 
+@return function returns reason. 
+*/
+std::uintptr_t halt();
 
 
 }

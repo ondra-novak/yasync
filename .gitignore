@@ -27,3 +27,10 @@
 *.exe
 *.out
 *.app
+*.filters
+*.idb
+*.db
+*.opendb
+src/tests/Debug/
+src/yasync/Debug/yasync.tlog/CL.command.1.tlog
+src/yasync/Debug/

@@ -13,62 +13,14 @@
 
 #include <memory>
 #include <fstream>
-#include "../immujson/json.h"
-#include "../immujson/compress.tcc"
-#include "../immujson/basicValues.h"
 #include "testClass.h"
 
-using namespace json;
-
-static int leakCounter = 0;
-void *operator new(std::size_t x) {
-	leakCounter++;
-	return malloc(x);
-}
-
-void operator delete(void *p) {
-	leakCounter--;
-	free(p);
-}
-
-void compressDemo(std::string file) {
-	std::ifstream infile(file);
-	{
-		std::ofstream outfile(file+".cmp",std::ofstream::out|std::ostream::trunc| std::ofstream::binary);
-		{
-			auto compressor = compress([&outfile](unsigned char b){
-				outfile.put(b);
-			});
-			int z;
-			while ((z = infile.get()) != -1) {
-				compressor((char)z);
-			}
-		}
-	}
-	{
-		std::ifstream infile(file+".cmp",std::ifstream::binary);
-		std::ofstream outfile(file+".decmp",std::ofstream::out|std::ostream::trunc|std::ofstream::binary);
-		{
-			auto decompressor = decompress([&infile](){
-				return infile.get();
-			});
-			int z;
-			while ((z = decompressor()) != -1) {
-				outfile.put((char)z);
-			}
-		}
-	}
-
-}
-
-void subobject(Object &&obj) {
-	obj("outbreak", 19)
-		("outgrow", 21);
-}
+#include "../yasync/lockr.h"
 
 
 int main(int , char **) {
 	TestSimple tst;
+#if 0
 
 	//Normalize test across platforms
 	json::maxPrecisionDigits = 4;
@@ -854,5 +806,6 @@ tst.test("Object.enumItems", "age:19,data:[90,60,90],frobla:12.3,kabrt:289,name:
 
 	}
 #endif
-	return tst.didFail()?1:0;
+#endif
+		return tst.didFail()?1:0;
 }

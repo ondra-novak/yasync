@@ -6,8 +6,6 @@
 #include "alertfn.h"
 namespace yasync {
 
-
-
 	class SandMan: public AbstractAlertFunction {
 	public:
 
@@ -15,6 +13,7 @@ namespace yasync {
 		SandMan();
 		virtual void wakeUp(const std::uintptr_t *reason = nullptr) throw();
 		virtual bool sleep(const Timeout &tm, std::uintptr_t *reason = nullptr) ;
+		virtual std::uintptr_t halt();
 
 	protected:
 		std::mutex mutx;
@@ -23,6 +22,5 @@ namespace yasync {
 		bool alerted;
 
 	};
-
 
 }

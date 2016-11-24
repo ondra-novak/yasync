@@ -38,6 +38,18 @@ bool SandMan::sleep(const Timeout& tm, std::uintptr_t* reason) {
 	return false;
 }
 
+std::uintptr_t SandMan::halt()
+{
+	std::unique_lock<std::mutex> um(mutx);
+	while (!alerted) {
+		condVar.wait(um);
+	}
+	std::uintptr_t ret = reason;
+	reason = 0;
+	alerted = false;
+	return ret;
+}
+
 static thread_local RefCntPtr<SandMan> curSandman;
 
 static RefCntPtr<SandMan> getCurrentSandman()  {
@@ -51,6 +63,11 @@ static RefCntPtr<SandMan> getCurrentSandman()  {
 
 bool sleep(const Timeout &tm, std::uintptr_t *reason)  {
 	return getCurrentSandman()->sleep(tm,reason);
+}
+
+std::uintptr_t halt()
+{
+	return getCurrentSandman()->halt();
 }
 
 AlertFn AlertFn::currentThread() {

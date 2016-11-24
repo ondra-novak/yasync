@@ -11,16 +11,17 @@ public:
 	typedef std::chrono::steady_clock::time_point Clock;
 
 	///Currently expires
-	Timeout();
+	Timeout() :pt(std::chrono::steady_clock::now()), neverExpires(false) {}
 	///Never expires
-	Timeout(std::nullptr_t x);
+	Timeout(std::nullptr_t) :neverExpires(true) {}
 	///Expire at specified time
-	Timeout(const Clock &clock);
+	Timeout(const Clock &clock) : pt(clock), neverExpires(false) {}
 	///Expires after specified miliseconds
-	Timeout(std::uintptr_t ms);
+	Timeout(std::uintptr_t ms) : pt(std::chrono::steady_clock::now() + std::chrono::milliseconds(ms)), neverExpires(false) {}
 	///Expires after specified duration
 	template<typename Rep, typename Period>
-	Timeout(const std::chrono::duration<Rep,Period> &dur);
+	Timeout(const std::chrono::duration<Rep, Period> &dur)
+		: pt(std::chrono::steady_clock::now() + dur) {}
 
 
 	///returns time when expires.
@@ -30,71 +31,50 @@ public:
 	}
 
 	///compare two timeouts
-	bool operator>(const Timeout &tm) const;
+	bool operator>(const Timeout &tm) const { return compare(tm) > 0; }
 	///compare two timeouts
-	bool operator<(const Timeout &tm) const;
+	bool operator<(const Timeout &tm) const { return compare(tm) < 0; };
 	///compare two timeouts
-	bool operator==(const Timeout &tm) const;
+	bool operator==(const Timeout &tm) const { return compare(tm) == 0; };
 	///compare two timeouts
-	bool operator!=(const Timeout &tm) const;
+	bool operator!=(const Timeout &tm) const { return compare(tm) != 0; };
 	///compare two timeouts
-	bool operator>=(const Timeout &tm) const;
+	bool operator>=(const Timeout &tm) const { return compare(tm) >= 0; };
 	///compare two timeouts
-	bool operator<=(const Timeout &tm) const;
+	bool operator<=(const Timeout &tm) const { return compare(tm) <= 0; };
 
 	///returns true if not expired
-	bool operator!() const;
+	bool operator!() const {
+		return operator>=(Timeout());
+	}
 	///returns true expired
-	operator bool() const;
+	operator bool() const {
+		return operator<(Timeout());
+	}
+
+	
 
 protected:
 	Clock pt;
 	bool neverExpires;
 
-	int compare(const Timeout &tm) const;
+	int compare(const Timeout &tm) const {
+		if (neverExpires) {
+			if (tm.neverExpires) return 0;
+			else return 1;
+		}
+		else if (tm.neverExpires) {
+			return -1;
+		}
+		else {
+			if (pt < tm.pt) return -1;
+			else if (pt > tm.pt) return 1;
+			return 0;
+		}
+	}
 
 
 };
-
-
-inline Timeout::Timeout():pt(std::chrono::steady_clock::now()),neverExpires(false) {}
-inline Timeout::Timeout(std::nullptr_t x):neverExpires(true) {}
-inline Timeout::Timeout(const Clock& clock):pt(clock),neverExpires(false) {}
-inline Timeout::Timeout(std::uintptr_t ms):pt(std::chrono::steady_clock::now()+std::chrono::milliseconds(ms)),neverExpires(false) {}
-
-template<typename Rep, typename Period>
-inline Timeout::Timeout(const std::chrono::duration<Rep, Period>& dur)
-:pt(std::chrono::steady_clock::now()+dur),neverExpires(false) {}
-
-inline bool Timeout::operator >(const Timeout& tm) const {
-	if (neverExpires) {
-		if (tm.neverExpires) return false;
-		return true;
-
-}
-
-inline bool Timeout::operator <(const Timeout& tm) const {
-}
-
-inline bool Timeout::operator ==(const Timeout& tm) const {
-}
-
-inline bool Timeout::operator !=(const Timeout& tm) const {
-}
-
-inline bool Timeout::operator >=(const Timeout& tm) const {
-}
-
-inline bool Timeout::operator <=(const Timeout& tm) const {
-}
-
-inline bool Timeout::operator !() const {
-}
-
-inline Timeout::operator bool() const {
-}
-
-
 
 
 }
