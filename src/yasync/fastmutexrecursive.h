@@ -1,6 +1,6 @@
 #pragma once
 
-#include "lock.h"
+#include "fastmutex.h"
 namespace yasync {
 
 
@@ -9,10 +9,10 @@ namespace yasync {
 	in single thread without deadlock. If you need transfer ownership, you
 	need to do it explicitly */
 
-	class LockR : private Lock {
+	class FastMutexRecursive : private FastMutex {
 	public:
 		typedef AlertFn ThreadRef;
-		LockR() :ownerThread(nullptr),recursiveCount(0) {}
+		FastMutexRecursive() :ownerThread(nullptr),recursiveCount(0) {}
 
 		///Lock FastLock 
 		/** Function also takes care on recursive locking which causes deadlock on standard FastLock.
@@ -52,7 +52,7 @@ namespace yasync {
 		bool tryLock() {
 			ThreadRef cid = ThreadRef::currentThread();
 			//try lock 
-			if (Lock::tryLock()) {
+			if (FastMutex::tryLock()) {
 				//if success, set setup recursive count
 
 				ownerThread = ThreadRef::currentThread();
@@ -89,7 +89,7 @@ namespace yasync {
 
 					ownerThread = ThreadRef(nullptr);
 
-					Lock::unlock();
+					FastMutex::unlock();
 
 				}
 
@@ -110,7 +110,7 @@ namespace yasync {
 
 			unsigned int ret = recursiveCount.load(std::memory_order_acquire);
 			recursiveCount.store(0, std::memory_order_release);
-			Lock::unlock();
+			FastMutex::unlock();
 			return ret;
 		}
 
@@ -129,7 +129,7 @@ namespace yasync {
 			//if tryLock enabled
 			if (tryLock) {
 				//call original tryLock - it returns false, when lock is owned
-				if (!Lock::tryLock()) return false;
+				if (!FastMutex::tryLock()) return false;
 			}
 			else {
 				//try to lock

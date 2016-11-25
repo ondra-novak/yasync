@@ -103,6 +103,16 @@ function is equivalent to sleep(nullptr) but contains less code.
 std::uintptr_t halt();
 
 
+///Returns this thread identificator
+/**
+ * The function returns a number, which is associated with current thread.
+ *
+ *
+ * @return
+ */
+std::uintptr_t thisThreadId();
+
+
 }
 
 

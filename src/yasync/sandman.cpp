@@ -75,6 +75,20 @@ AlertFn AlertFn::currentThread() {
 	return AlertFn(x);
 }
 
+std::uintptr_t initThreadId() {
+	int dummy;
+	int *ptr = &dummy;
+	return (std::uintptr_t)ptr;
 }
 
+static thread_local std::uintptr_t curThreadId = 0;
 
+std::uintptr_t thisThreadId() {
+	std::uintptr_t x = curThreadId;
+	if (x == 0) {
+		x = curThreadId = initThreadId();
+	}
+	return x;
+}
+
+}

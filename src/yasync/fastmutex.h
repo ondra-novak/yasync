@@ -4,23 +4,21 @@
 #include "timeout.h"
 namespace yasync {
 
-	///FastLock can be used to implement very fast locking mechanism
-	/** FastLock is implemented in user-space using inter-locked operations
+	///FastMutex can be used to implement very fast locking mechanism
+	/** FastMutex is implemented in user-space using inter-locked operations
 	* and simple queue of threads. It doesn't support asynchronous locking and
 	* timeouted waiting. Once thread starts waiting, it cannot be interrupted
 	* until object is unlocked.
 	*
-	* FastLock takes only 8 (16) bytes and doesn't take any system resources
+	* FastMutex takes only 8 (16) bytes and doesn't take any system resources
 	* when it is idle.
 	*
-	* FastLock is designed to lock piece of code where state of data
+	* FastMutex is designed to lock piece of code where state of data
 	* can be inconsistent for a while. Because it is implemented in user-space
 	* it doesn't enter to the kernel until it is really necessary (in conflicts)
 	*
-	* FastLock uses Thread's sleep/wakeUp feature and requires Thread object
-	* associated with the current thread, otherwise it fails.
 	*/
-	class Lock {
+	class FastMutex {
 
 	protected:
 		class Slot;
@@ -37,7 +35,9 @@ namespace yasync {
 	public:
 
 
-		Lock() :queue(nullptr), owner(nullptr) {}
+		FastMutex() :queue(nullptr), owner(nullptr) {}
+		FastMutex(const FastMutex &) = delete;
+		FastMutex &operator=(const FastMutex &) = delete;
 
 		///Lock the object
 		/**
@@ -130,10 +130,10 @@ namespace yasync {
 		* exception's stack unwind.
 		*/
 		class Async {
-			Lock &lk;
+			FastMutex &lk;
 			Slot sl;
 		public:
-			Async(Lock &lk) :lk(lk), sl(AlertFn::currentThread()) {
+			Async(FastMutex &lk) :lk(lk), sl(AlertFn::currentThread()) {
 				lk.addToQueue(&sl);
 			}
 			~Async() {

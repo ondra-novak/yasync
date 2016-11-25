@@ -15,11 +15,21 @@
 #include <fstream>
 #include "testClass.h"
 
-#include "../yasync/lockr.h"
+#include "../yasync/fastmutexrecursive.h"
+#include "../yasync/gate.h"
+#include "../yasync/semaphore.h"
+#include "../yasync/thread.h"
+
+
 
 
 int main(int , char **) {
 	TestSimple tst;
+
+	yasync::thread >> [](){
+		std::cout << "inthread";
+	};
+
 #if 0
 
 	//Normalize test across platforms
