@@ -19,15 +19,28 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="dispatcher.cpp" />
+    <ClCompile Include="rwMutex.cpp" />
     <ClCompile Include="sandman.cpp" />
+    <ClCompile Include="thread.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="alertfn.h" />
-    <ClInclude Include="lock.h" />
-    <ClInclude Include="lockr.h" />
+    <ClInclude Include="dispatcher.h" />
+    <ClInclude Include="fastmutex.h" />
+    <ClInclude Include="fastmutexrecursive.h" />
+    <ClInclude Include="gate.h" />
+    <ClInclude Include="lockScope.h" />
+    <ClInclude Include="micromutex.h" />
+    <ClInclude Include="promise.h" />
     <ClInclude Include="refcnt.h" />
     <ClInclude Include="sandman.h" />
+    <ClInclude Include="semaphore.h" />
+    <ClInclude Include="rwMutex.h" />
+    <ClInclude Include="syncpt.h" />
+    <ClInclude Include="thread.h" />
     <ClInclude Include="timeout.h" />
+    <ClInclude Include="waitqueue.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{06DDED8D-9085-432F-BD62-720766593606}</ProjectGuid>

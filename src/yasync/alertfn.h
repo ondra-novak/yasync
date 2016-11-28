@@ -54,11 +54,43 @@ class AlertFn
 {
 public:
 	AlertFn(RefCntPtr<AbstractAlertFunction> obj):obj(obj) {}
+	///Create alert function which wakes current thread
+	/**
+	  @return function which wakes current thread. Function can
+	  be used from other thread.
+	*/
 	static AlertFn currentThread();
+	
+	///Create alert which calls specified function
+	/**
+	  @param fn function. The function must have one argument - pointer to
+	  std::uintptr_t which carries a reason, if supplied. Pointer can be
+	  null in case when no reason has been supplied 
+	  
+	  @return alert function
+
+	  @note such alert is executed in context of caller. If you need
+	  to call it in the context of other thread, you need to pass the
+	  alert through the dispatcher. See DispatchFn
+	  */
+	template<typename Fn>
+	static AlertFn call(const Fn &fn) {
+		class F : public AbstractAlertFunction {
+		public:
+			virtual void wakeUp(const std::uintptr_t *reason) throw() {
+				fn(reason);
+			}
+			F(const Fn &fn) :fn(fn) {}
+		protected:
+			Fn fn;
+		};
+		return AlertFn(RefCntPtr<AbstractAlertFunction>(new F(fn)));
+	}
+	
 
 
 	///Make alert without reason
-	void operator()() throw() {
+	void operator()() const throw() {
 		obj->wakeUp();
 	}
 	///Make alert with a reason
@@ -68,7 +100,7 @@ public:
 	 * @note function cannot guarantee that reason will be delivered. It depends
 	 * on target implementation
 	 */
-	void operator()(std::uintptr_t reason) throw() {
+	void operator()(std::uintptr_t reason) const throw() {
 		obj->wakeUp(&reason);
 	}
 

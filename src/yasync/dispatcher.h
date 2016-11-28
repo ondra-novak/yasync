@@ -2,6 +2,7 @@
 
 #include <functional>
 #include "refcnt.h"
+#include "alertfn.h"
 
 
 namespace yasync {
@@ -58,10 +59,10 @@ public:
 	 * thread exited. Function was not dispatched
 	 */
 	template<typename Fn>
-	bool operator>>(const Fn &fn) throw() {
+	bool operator>>(const Fn &fn) const throw() {
 		class F: public AbstractDispatchedFunction {
 		public:
-			F(Fn &fn):fn(fn) {}
+			F(const Fn &fn):fn(fn) {}
 			void run() throw() {
 				fn();
 			}
@@ -78,6 +79,18 @@ protected:
 	RefCntPtr<AbstractDispatcher> obj;
 
 };
+
+///Dispatches an alert
+/**
+An alert which can be target to an function is routed through the dispatcher.
+This causes, that alert is called in context of dispatching thread.
+
+@note After destroying the thread, the alert is discarded. This may be
+source of deadlock when an other thread is waiting for such alert. If you
+need to handle this situation, use promises, which reports such situation
+through the exception
+*/
+AlertFn operator>> (DispatchFn dispatcher, AlertFn target);
 
 ///sleeping for specified time which can be interrupted by an alert or dispatched function
 /**

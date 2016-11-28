@@ -65,10 +65,13 @@ public:
 	 */
 	Semaphore &operator=(unsigned int newcount) {
 		LockScope<FastMutex> _(lk);
-		count == newcount;
+		count = newcount;
 		while (count > 0 && alertOne()) count--;
 	}
 
+	~Semaphore() {
+		lk.lock();
+	}
 
 protected:
 

@@ -21,6 +21,7 @@ public:
 		thread >> [fn](){
 			fn->run();
 		};
+		return true;
 	}
 
 };

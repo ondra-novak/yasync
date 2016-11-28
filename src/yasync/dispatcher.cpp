@@ -61,6 +61,7 @@ DispatchFn DispatchFn::currentThread() {
 	return DispatchFn(x);
 }
 
+
 bool sleepAndDispatch(const Timeout& tm, std::uintptr_t* reason) {
 	return getCurrentDispatcher()->sleep(tm,reason);
 }
@@ -126,5 +127,23 @@ void Dispatcher::close() {
 
 
 }
+
+AlertFn operator >> (DispatchFn  dispatcher, AlertFn target)
+{
+	return AlertFn::call([dispatcher, target](const std::uintptr_t *reason) {
+		if (reason) {
+			std::uintptr_t reasonValue = *reason;
+			dispatcher >> [target,reasonValue] {
+				target(reasonValue);
+			};
+		}
+		else {
+			dispatcher >> [target]{
+				target();
+			};
+		}
+	});
+}
+
 
 }

@@ -63,7 +63,9 @@ public:
 
 	Gate(const Gate &) = delete;
 	Gate &operator=(const Gate &) = delete;
-
+	~Gate() {
+		lock.lock();
+	}
 protected:
 
 	FastMutex lock;
@@ -122,6 +124,9 @@ public:
 			Super::alertAll();
 		}
 		return *this;
+	}
+	~CountGate() {
+		lock.lock();
 	}
 
 

@@ -35,15 +35,6 @@ namespace yasync {
 				q.subscribe(*this);
 			}
 
-			Ticket(const Ticket &t)
-				:alertFn(t.alertFn)
-				,queue(t.queue)
-				,alerted(t.alerted)
-				,next(nullptr) {
-				if (!alerted) queue.subscribe(*this);
-			}
-
-
 			~Ticket() {
 				if (!alerted && !removed)
 					queue.signoff(*this);

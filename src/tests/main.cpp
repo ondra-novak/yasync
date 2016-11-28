@@ -19,16 +19,45 @@
 #include "../yasync/gate.h"
 #include "../yasync/semaphore.h"
 #include "../yasync/thread.h"
+#include "../yasync/rwmutex.h"
+#include <functional>
+#include "../yasync/promise.h"
 
 
 
+template<typename Fn, typename T>
+auto call(const Fn &fn, const T &) -> decltype(fn()) {
+	std::cout << "fn():";
+	return fn();
+}
+template<typename Fn, typename T>
+auto call(const Fn &fn,const T &x) -> decltype(fn(x)) {
+	std::cout << "fn(int):";
+	return fn(x);
+}
+template<typename Fn, typename T>
+auto call(const Fn &fn, const T &x) -> decltype(fn(x,x)) {
+	std::cout << "fn(int,int):";
+	return fn(x,x);
+}
+
+void test(int x) {
+	std::cout << "test(int)" << std::endl;;	
+}
+
+template class yasync::Future<int>;
 
 int main(int , char **) {
 	TestSimple tst;
 
-	yasync::thread >> [](){
+	/*yasync::thread >> [](){
 		std::cout << "inthread";
-	};
+	};*/
+
+	call([] {std::cout << "body" << std::endl; }, 1);
+	call([](int) {std::cout << "body" << std::endl;  },1);
+	call([](int,int) {std::cout << "body" << std::endl;  },1);
+	call(test, 1);
 
 #if 0
 
