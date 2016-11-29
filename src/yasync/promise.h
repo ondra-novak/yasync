@@ -5,7 +5,6 @@
 #include "refcnt.h"
 #include "fastmutex.h"
 #include "lockScope.h"
-#include "waitqueue.h"
 
 namespace yasync {
 
@@ -50,11 +49,10 @@ template<typename T> class Future {
 
 	friend class Promise<T>;
 
-	class Internal: public WaitQueue<Internal> {
+	class Internal {
 	public:
 		Internal()
-			: WaitQueue<Internal>(WaitQueue<Internal>::fifo)
-			, firstObserver(nullptr)
+			: firstObserver(nullptr)
 			, pcnt(0)
 			, fcnt(0)
 			, state(unresolved)
@@ -64,6 +62,14 @@ template<typename T> class Future {
 			LockScope<FastMutex> _(lk);
 			if (state != unresolved) return;
 			state = resolving;
+			if (fcnt > pcnt) { //store result only if there are future variables
+				try {
+					value = std::unique_ptr<T>(new T(v));
+				}
+				catch (...) {
+					exception = std::current_exception();
+				}
+			}
 			while (firstObserver) {
 				AbstractPromiseObserver<T> *x = firstObserver;
 				firstObserver = firstObserver->next;
@@ -71,15 +77,6 @@ template<typename T> class Future {
 				(*x)(v);
 			}
 			state = resolved;
-			if (fcnt > pcnt) { //store result only if there are future variables
-				try {					
-					value = std::unique_ptr<T>(new T(v));
-				}
-				catch (...) {
-					exception = std::current_exception();
-				}
-				this->alertAll();
-			}
 		}
 
 		void resolve(const std::exception_ptr &e) throw() {
@@ -98,12 +95,17 @@ template<typename T> class Future {
 
 		void addObserver(AbstractPromiseObserver<T> *obs) throw() {
 			LockScope<FastMutex> _(lk);
+			if (state == resolved) {
+				UnlockScope<FastMutex> _(lk);
+				if (exception != nullptr) (*obs)(exception);
+				else (*obs)(*value);
+				return;
+			}
 			AbstractPromiseObserver<T> **x = &firstObserver;
 			while (*x != nullptr) {
 				x = &(*x)->next;
 			}
 			*x = obs;
-			this->alertAll();
 		}
 
 		void removeObserver(AbstractPromiseObserver<T> *obs) throw() {
@@ -144,6 +146,10 @@ template<typename T> class Future {
 			return value.get();
 		}
 
+		std::exception_ptr getException() const {
+			return exception;
+		}
+
 		State getState() const {
 			return state;
 		}
@@ -159,16 +165,6 @@ template<typename T> class Future {
 			return fcnt == 0;
 		}
 
-		void onSignoff(Ticket &t) {
-			LockScope<FastMutex> _(lk);
-			this->add(t);
-		}
-
-		void onSubscribe(Ticket &t) {
-			LockScope<FastMutex> _(lk);
-			this->remove(t);
-		}
-
 		bool hasPromise() const {
 			LockScope<FastMutex> _(lk);
 			return pcnt > 0 || state != unresolved;
@@ -176,7 +172,7 @@ template<typename T> class Future {
 
 
 	protected:
-		FastMutex lk;
+		mutable FastMutex lk;
 		std::unique_ptr<T> value;
 		std::exception_ptr exception;
 		AbstractPromiseObserver<T> *firstObserver;
@@ -188,7 +184,6 @@ template<typename T> class Future {
 
 	public:
 
-		typedef typename WaitQueue<Internal>::Ticket Ticket;
 
 	///Creates future variable
 	/** Function creates future including of allocation of internal structure.
@@ -225,18 +220,65 @@ template<typename T> class Future {
 	///Retrieve value when future is resolved
 	/** @retval valid pointer to value (which is valid until the last future
 	object is destroyed. If the future is not resolved yet, the function 
-	returns nullptr */
+	returns nullptr. If future has been resolved by exception, 
+	it also returns nullptr */
 	const T *tryGetValue() const {	return value->getValue();}
 	
-	///Create ticket for asynchronous waiting
-	/** More information about tickets see WaitQueue */
-	Ticket ticket() const { return value->ticket(); }
+	///Retreives exception pointer
+	/**
+	 @note Future must be resolved by exception. Otherwise, function returns nullptr
+	 */
+	std::exception_ptr getException() const { return value->getException(); }
+
+	///Adds custom observer
+	/**
+	Observers are more general then function handlers. If you need some
+	special action, you can create and add observer to the future. The future
+	doesn't own the pointer, however you can't destroy it, 
+	until it is removed. Each observer can be added to only one future at
+	time. Adding the observer to multiple futures causes undefined behaviour.
+
+	The future doesn't own the observer, so you have to destroy it by self
+	once it is no longer needed. However, because every future is 
+	always resolved some way, and it is resolved just once, you can
+	destroy the observer after resolution, because once the future is
+	resolved, all observers are removed automatically.	
+	*/
+	void addObserver(AbstractPromiseObserver<T> *obs) {
+		value->addObserver(obs);
+	}
+	///Removes observer before the future is resolved
+	/**
+	@param obs observer to remove. Pointer is subject of comparison
+	@retval true removed
+	@retval false not found,or already resolved
+	*/
+	bool removeObserver(AbstractPromiseObserver<T> *obs) {
+		value->removeObserver(obs);
+	}
 
 	///Wait for resolving
 	/**
 	 Function waits for infinite period until future is resolved 
 	 */
-	void wait() { value->wait(); }
+	void wait() { 
+		class Obs : public AbstractPromiseObserver<T> {
+		public:
+			Obs(const AlertFn &alert) :alert(alert) {}
+			virtual void operator()(const T &) throw() {
+				alert();
+			}
+			virtual void operator()(const std::exception_ptr &) throw() {
+				alert();
+			}
+			AlertFn alert;
+		};
+		if (!isResolved()) {
+			Obs obs(AlertFn::currentThread());
+			addObserver(&obs);
+			while (!isResolved()) halt() ();
+		}
+	}
 
 	///Timeouted wait for resolving
 	/**
