@@ -21,43 +21,29 @@
 #include "../yasync/thread.h"
 #include "../yasync/rwmutex.h"
 #include <functional>
-#include "../yasync/promise.h"
+#include "../yasync/future.h"
 
 
 
-template<typename Fn, typename T>
-auto call(const Fn &fn, const T &) -> decltype(fn()) {
-	std::cout << "fn():";
-	return fn();
-}
-template<typename Fn, typename T>
-auto call(const Fn &fn,const T &x) -> decltype(fn(x)) {
-	std::cout << "fn(int):";
-	return fn(x);
-}
-template<typename Fn, typename T>
-auto call(const Fn &fn, const T &x) -> decltype(fn(x,x)) {
-	std::cout << "fn(int,int):";
-	return fn(x,x);
-}
 
-void test(int x) {
-	std::cout << "test(int)" << std::endl;;	
-}
-
-template class yasync::Future<int>;
 
 int main(int , char **) {
 	TestSimple tst;
 
-	/*yasync::thread >> [](){
-		std::cout << "inthread";
-	};*/
+	yasync::Future<int> f = yasync::thread >> []{
 
-	call([] {std::cout << "body" << std::endl; }, 1);
-	call([](int) {std::cout << "body" << std::endl;  },1);
-	call([](int,int) {std::cout << "body" << std::endl;  },1);
-	call(test, 1);
+			yasync::sleep(10000);
+			return 42;
+
+	} >> [](int i) {
+		std::cout << "In handler result:" << i << std::endl;
+	};
+
+	f.wait();
+	std::cout << "Direct result:" << f.getValue() << std::endl;
+
+
+
 
 #if 0
 

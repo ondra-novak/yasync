@@ -18,7 +18,7 @@ public:
 	}
 
 	virtual bool dispatch(const Fn &fn) throw() {
-		thread >> [fn](){
+		thread >> [fn] {
 			fn->run();
 		};
 		return true;

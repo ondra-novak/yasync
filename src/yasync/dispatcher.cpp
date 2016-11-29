@@ -86,7 +86,7 @@ bool Dispatcher::sleep(const Timeout& tm, std::uintptr_t* reason) {
 	lk.lock();
 	if (fnqueue.empty()) {
 		lk.unlock();
-		if (sleep(tm,reason)) return true;
+		if (::yasync::sleep(tm,reason)) return true;
 		lk.lock();
 	}
 	if (!fnqueue.empty()) {
@@ -106,7 +106,7 @@ std::uintptr_t Dispatcher::halt() {
 	lk.lock();
 	if (fnqueue.empty()) {
 		lk.unlock();
-		reason = halt();
+		reason = ::yasync::halt();
 		lk.lock();
 	}
 	if (!fnqueue.empty()) {
@@ -117,7 +117,7 @@ std::uintptr_t Dispatcher::halt() {
 	} else {
 		lk.unlock();
 	}
-	return false;
+	return reason;
 }
 
 void Dispatcher::close() {
