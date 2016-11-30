@@ -29,10 +29,11 @@
     <ClInclude Include="dispatcher.h" />
     <ClInclude Include="fastmutex.h" />
     <ClInclude Include="fastmutexrecursive.h" />
+    <ClInclude Include="future.h" />
+    <ClInclude Include="futuredispatch.h" />
     <ClInclude Include="gate.h" />
     <ClInclude Include="lockScope.h" />
     <ClInclude Include="micromutex.h" />
-    <ClInclude Include="promise.h" />
     <ClInclude Include="refcnt.h" />
     <ClInclude Include="sandman.h" />
     <ClInclude Include="semaphore.h" />

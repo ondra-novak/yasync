@@ -8,19 +8,19 @@
 
 namespace yasync {
 
-yasync::SandMan::SandMan():reason(0),alerted(false) {
+SandMan::SandMan():reason(0),alerted(false) {
 }
 
 void SandMan::wakeUp(const std::uintptr_t* reason) throw () {
 	std::lock_guard<std::mutex> _(mutx);
-	alerted = true;
+	alerted.store(true, std::memory_order_release);
 	if (reason) this->reason = *reason;
 	condVar.notify_all();
 }
 
 bool SandMan::sleep(const Timeout& tm, std::uintptr_t* reason) {
 	std::unique_lock<std::mutex> um(mutx);
-	while (!alerted) {
+	while (!alerted.load(std::memory_order_acquire)) {
 		if (tm == nullptr) condVar.wait(um);
 		else {
 			Timeout::Clock tp = tm;
@@ -34,19 +34,19 @@ bool SandMan::sleep(const Timeout& tm, std::uintptr_t* reason) {
 		*reason = this->reason;
 		this->reason = 0;
 	}
-	alerted = false;
+	alerted.store(false, std::memory_order_release);
 	return false;
 }
 
 std::uintptr_t SandMan::halt()
 {
 	std::unique_lock<std::mutex> um(mutx);
-	while (!alerted) {
+	while (!alerted.load(std::memory_order_acquire)) {
 		condVar.wait(um);
 	}
 	std::uintptr_t ret = reason;
 	reason = 0;
-	alerted = false;
+	alerted.store(false, std::memory_order_release);
 	return ret;
 }
 

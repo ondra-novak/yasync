@@ -29,6 +29,24 @@ public:
 };
 
 
+template<typename Fn, typename RetV> class DispatchedFunction;
+template<typename Fn> class DispatchedFunction<Fn, void> : public AbstractDispatchedFunction {
+public:
+	typedef bool RetT;
+
+	virtual void run() throw() {
+		fn();
+	}
+	DispatchedFunction(const Fn &fn) :fn(fn) {}
+	
+	static RetT dispatch(AbstractDispatcher *disp, const Fn &fn) {
+		return disp->dispatch(new DispatchedFunction(fn));
+	}
+	
+protected:
+	Fn fn;
+};
+
 ///Dispatcher function
 /** Dispatcher function allows to pass a function to a different thread. The function
  * is executed in context of target thread. This require a dispatching thread (the
@@ -59,17 +77,8 @@ public:
 	 * thread exited. Function was not dispatched
 	 */
 	template<typename Fn>
-	bool operator>>(const Fn &fn) const throw() {
-		class F: public AbstractDispatchedFunction {
-		public:
-			F(const Fn &fn):fn(fn) {}
-			void run() throw() {
-				fn();
-			}
-		private:
-			Fn fn;
-		};
-		return obj->dispatch(new F(fn));
+	typename DispatchedFunction<Fn,typename std::result_of<Fn()>::type>::RetT operator>>(const Fn &fn) const throw() {
+		return DispatchedFunction<Fn, typename std::result_of<Fn()>::type>::dispatch(obj, fn);
 	}
 
 	bool operator==(const DispatchFn &other) const { return obj == other.obj; }
@@ -79,6 +88,7 @@ protected:
 	RefCntPtr<AbstractDispatcher> obj;
 
 };
+
 
 ///Dispatches an alert
 /**

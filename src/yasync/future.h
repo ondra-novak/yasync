@@ -210,6 +210,22 @@ template<typename T> class Future {
 			return fcnt == 0;
 		}
 
+		void cancel(const std::exception_ptr &e) {
+			AbstractPromiseObserver<T> *obs, *item;
+			{
+				LockScope<FastMutex> _(lk);
+				obs = firstObserver;
+				firstObserver = nullptr;
+				state = resolved;
+				exception = e;
+			}
+			while (obs != nullptr) {
+				item = obs;
+				obs = obs->next;
+				item->operator()(e);
+			}
+		}
+
 		const T *getValue() const {
 			return value.get();
 		}
@@ -330,14 +346,17 @@ template<typename T> class Future {
 	///This observer generates alert when the Future is resolved. Value is ignored, you have to retrieve it from the Future object
 	class AlertObserver: public AbstractPromiseObserver<T> {
 	public:
-		AlertObserver(const AlertFn &alert) :alert(alert) {}
+		AlertObserver(const AlertFn &alert) :alert(alert),alerted(false) {}
 		virtual void operator()(const T &) throw() {
 			alert();
+			alerted = true;
 		}
 		virtual void operator()(const std::exception_ptr &) throw() {
 			alert();
+			alerted = true;
 		}
 		AlertFn alert;
+		bool alerted;
 	};
 
 	///Wait for resolving
@@ -348,7 +367,7 @@ template<typename T> class Future {
 		if (!isResolved()) {
 			AlertObserver obs(AlertFn::currentThread());
 			addObserver(&obs);
-			while (!isResolved()) {
+			while (!obs.alerted) {
 				halt();
 			}
 		}
@@ -367,7 +386,7 @@ template<typename T> class Future {
 		if (!isResolved()) {
 			AlertObserver obs(AlertFn::currentThread());
 			addObserver(&obs);
-			while (!isResolved())
+			while (!obs.alerted)
 				if (!sleep(tm)) {
 					removeObserver(&obs);
 					return false;
@@ -406,6 +425,37 @@ template<typename T> class Future {
 	/** To control the waiting, use Future::wait() before you receive the value */
 	operator const T &() const {
 		return get();
+	}
+
+	///Return new future which is resolved by result of current future in 1:1 transformation
+	/** Isolated future is independent to original future, it has own observer list and
+	own resolution state. This is important if used along with function cancel()
+	*/
+	Future<T> isolate() const {
+		Future<T> res;
+		Promise<T> pres = res.getPromise();
+		pres.setValue(*this);
+		return res;
+	}
+
+	///Cancels future waiting
+	/**
+	Allows to future to cancel waiting. Canceled future becomes resolved with the exception
+	CanceledFuture. 
+
+	There is difference between Future<T>::cancel() and Promise<T>::setException. The function
+	cancel() performs operation instantly, even if calling the observers may take some time.
+	Observers are instantly removed and the future is set to resolved, so it is
+	impossible that owner will call setValue and interrupt the cancelation process.
+
+	*/
+	void cancel() {
+		try {
+			throw CanceledPromise();
+		}
+		catch (...) {
+			value->cancel(std::current_exception());
+		}
 	}
 
 protected:
@@ -447,15 +497,23 @@ public:
 	void setValue(const Future<T> &v) const {
 		Promise<T> me = *this;
 		class Observer: public AbstractPromiseObserver<T> {
-
+		public:
+			Promise<T> me;
+			Observer(const Promise<T> &me):me(me) {}
+			virtual void operator()(const T &value) throw() {
+				me.setValue(value);
+				delete this;
+			}
+			virtual void operator()(const std::exception_ptr &exception) throw() {
+				me.setException(exception);
+				delete this;
+			}
 		};
-
-
-
+		v.addObserver(new Observer(me));
 	}
 
 	void setException(const std::exception_ptr &p) const {
-
+		value->resolve(p);
 	}
 
 
@@ -639,99 +697,25 @@ protected:
 	Fn fn;
 };
 
-template<typename T>
-class SafeDispatchFutureValue {
-public:
-	SafeDispatchFutureValue(const T &value, const Promise<T> &promise):value(value),promise(promise),processed(false) {}
-	SafeDispatchFutureValue(T &&x):value(std::move(x.value)),promise(std::move(x.promise)),processed(x.processed) {
-		x.processed = true;
-	}
-	~SafeDispatchFutureValue() {
-		try {
-			if (!processed) {
-				throw CanceledPromise();
-			}
-		} catch (...) {
-			promise.setException(std::current_exception());
-		}
-	}
-	void operator()() const {
-		promise.setValue(value);
-	}
-
-protected:
-	T value;
-	mutable Promise<T> promise;
-	bool processed;
-};
-
-template<typename T>
-class SafeDispatchFutureException {
-public:
-	SafeDispatchFutureException(const std::exception_ptr &except, const Promise<T> &promise):except(except),promise(promise),processed(false) {}
-	SafeDispatchFutureException(T &&x):except(std::move(x.except)),promise(std::move(x.promise)),processed(x.processed) {
-		x.processed = true;
-	}
-	~SafeDispatchFutureException() {
-		try {
-			if (!processed) {
-				throw CanceledPromise();
-			}
-		} catch (...) {
-			promise.setException(std::current_exception());
-		}
-	}
-	void operator()() const {
-		promise.setException(except);
-	}
-
-protected:
-	std::exception_ptr except;
-	mutable Promise<T> promise;
-	bool processed;
-};
-
-template<typename T>
-class DispatchObserver : public AbstractPromiseObserver<T> {
-public:
-	DispatchObserver(const Promise<T> &promise, const DispatchFn &dispatcher):promise(promise),dispatcher(dispatcher) {
-
-	}
-	virtual void operator()(const T &value) throw() {
-		dispatcher >> SafeDispatchFutureValue<T>(value,promise);
-		delete this;
-
-	}
-	virtual void operator()(const std::exception_ptr &exception) throw() {
-		dispatcher >> SafeDispatchFutureException<T>(exception,promise);
-		delete this;
-
-	}
-protected:
-	Promise<T> promise;
-	DispatchFn dispatcher;
-
-};
-
-
 }
+
 
 ///Define function which is called when the future is resolved
 /**
- * @param future future which is going to be resolved
- * @param fn function, which accepts the argument T (type of the future). The function can return value of
- *  the same type, other type, void or Future of any type. The function can also throw an exception, which
- *  is caught and used to resolve the returned Future
- *
- * @return Depends on return value of the function. It is generally Future<X> where X is type of return value of the
- * function fn. In case, that fn has no return value, result is Future<T>, because the function doesn't produces
- * the result, source result is used instead.
- *
- * @note function is not called when the future is resolved by an exception
- */
+	* @param future future which is going to be resolved
+	* @param fn function, which accepts the argument T (type of the future). The function can return value of
+	*  the same type, other type, void or Future of any type. The function can also throw an exception, which
+	*  is caught and used to resolve the returned Future
+	*
+	* @return Depends on return value of the function. It is generally Future<X> where X is type of return value of the
+	* function fn. In case, that fn has no return value, result is Future<T>, because the function doesn't produces
+	* the result, source result is used instead.
+	*
+	* @note function is not called when the future is resolved by an exception
+	*/
 template<typename T, typename Fn>
-auto operator >> (const Future<T> &future, const Fn &fn) -> typename _hlp::FutureHandlerReturn<T,decltype((*(Fn *)nullptr)(*(T *)nullptr))>::T {
-	typedef decltype((*(Fn *)nullptr)(*(T *)nullptr)) FnRet;
+auto operator >> (const Future<T> &future, const Fn &fn) -> typename _hlp::FutureHandlerReturn<T, typename std::result_of<Fn(T)>::type >::T {
+	typedef typename std::result_of<Fn(T)>::type FnRet;
 	return _hlp::ChainValueObserver<T, FnRet, Fn>::makeChain(future, fn);
 }
 ///Define exception handler, which is called when the future is resolved using an exception.
@@ -750,10 +734,11 @@ auto operator >> (const Future<T> &future, const Fn &fn) -> typename _hlp::Futur
  */
 
 template<typename T, typename Fn>
-auto operator >> (const Future<T> &future, const Fn &fn) -> typename _hlp::FutureHandlerReturn<T, decltype((*(Fn *)nullptr)(*(std::exception_ptr *)nullptr))>::T {
-	typedef decltype((*(Fn *)nullptr)(*(std::exception_ptr *)nullptr)) FnRet;
+auto operator >> (const Future<T> &future, const Fn &fn) -> typename _hlp::FutureHandlerReturn<T, typename std::result_of<Fn(std::exception_ptr)>::type >::T {
+	typedef typename std::result_of<Fn(std::exception_ptr)>::type  FnRet;
 	return _hlp::ChainExceptionObserver<T, FnRet, Fn>::makeChain(future,fn);
 }
+
 ///Define a function without arguments, which is called when future is resolved
 /**
  *
@@ -768,74 +753,31 @@ auto operator >> (const Future<T> &future, const Fn &fn) -> typename _hlp::Futur
  * the result, source result is used instead.
  */
 template<typename T, typename Fn>
-auto operator >> (const Future<T> &future, const Fn &fn) -> typename _hlp::FutureHandlerReturn<T, decltype((*(Fn *)nullptr)())>::T {
-	typedef decltype((*(Fn *)nullptr)()) FnRet;
+auto operator >> (const Future<T> &future, const Fn &fn) -> typename _hlp::FutureHandlerReturn<T, typename std::result_of<Fn()>::type >::T {
+	typedef typename std::result_of<Fn()>::type  FnRet;
 	return _hlp::ChainAnythingObserver<T, FnRet, Fn>::makeChain(future,fn);
 }
-
-///Intermediate object result of chaining the future with a dispatcher
-/** This intermediate object, it should not be stored in a variable. It is created when you chain
- *  a future with a dispatcher. It allows to chain additional functions to the future. The destructor
- *  of this object finally routes the chain through the dispatcher and connects it to the original
- *  future. This causes, that even resolved future will call the chain through the dispatcher. This prevents
- *  to various race conditions
- */
-template<typename T>
-class DispatchedFuture: public Future<T> {
-public:
-	DispatchedFuture(const Future<T> connectTo, const DispatchFn &dispatcher)
-		:connectTo(connectTo),dispatcher(dispatcher),connected(false) {}
-	~DispatchedFuture() {
-		if (!connected) connect();
-	}
-	DispatchedFuture(DispatchedFuture &&other)
-		:connectTo(std::move(other.connectTo)),dispatcher(std::move(other.dispatcher)),connected(other.connected) {
-		other.connected = true;
-	}
-
-	void connect() {
-		if (!connected) {
-			connectTo.addObserver(new _hlp::DispatchObserver<T>(Future<T>::getPromise(), dispatcher));
-			connected = true;
-		}
-	}
-
-	Promise<T> getPromise() = delete;
-
-protected:
-	Future<T> connectTo;
-	DispatchFn dispatcher;
-	bool connected;
-
-};
 
 template<typename T>
 inline Promise<T> Future<T>::getPromise() {
 	return Promise<T>(value);
 }
 
-
-
-///Create future which is resolved in other thread (through the dispatcher)
-/**
- * @param dispatcher dispatcher used to route processing into other thread
- * @return An intermediate object DispatchedFuture which helps to create chain that have to be processed
- * in other thread. The chain cannot be executed during the connection (this can happen for ordinary chain), it
- * is connected to the future once the DispatchedFuture is destroyed. The object DispatchedFuture is
- * inherited from the Future.
- */
-template<typename T>
-DispatchedFuture<T> operator >> (const Future<T> &fut, const DispatchFn &dispatcher) {
-	return DispatchedFuture<T>(fut, dispatcher);
-}
-
+///Handles operator >> with return value through the future		
 template<typename Fn, typename RetV>
 struct RunThreadFn {
 	typedef Future<RetV> ReturnType;
 	static Future<RetV> runThread(const Fn &fn) {
 		Future<RetV> f;
 		Promise<RetV> p = f.getPromise();
-		std::thread t([p,fn]{p.setValue(fn());});
+		std::thread t([p, fn] {
+			try {
+				p.setValue(fn());
+			}
+			catch (...) {
+				p.setException(std::current_exception());
+			}
+		});
 		t.detach();
 		return f;
 	}

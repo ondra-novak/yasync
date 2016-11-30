@@ -147,6 +147,11 @@
   <ItemGroup>
     <ClInclude Include="testClass.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\yasync\yasync.vcxproj">
+      <Project>{06dded8d-9085-432f-bd62-720766593606}</Project>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

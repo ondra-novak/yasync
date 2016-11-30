@@ -22,6 +22,7 @@
 #include "../yasync/rwmutex.h"
 #include <functional>
 #include "../yasync/future.h"
+#include "../yasync/futuredispatch.h"
 
 
 
@@ -30,15 +31,24 @@
 int main(int , char **) {
 	TestSimple tst;
 
-	yasync::Future<int> f = yasync::thread >> []{
+	yasync::Future<double> f = yasync::thread >> [] {
 
-			yasync::sleep(10000);
-			return 42;
-
+		yasync::sleep(10000);
+		return 42;
 	} >> [](int i) {
+		return i*0.1;
+	} >> [](double i) {
 		std::cout << "In handler result:" << i << std::endl;
+	} >> [] {
+		std::cout << "void result"<< std::endl;
+	} >> [](const std::exception_ptr &e) {
+		try {
+			std::rethrow_exception(e);
+		}
+		catch (std::exception &e) {
+			std::cout << "Excep[tion:" << e.what();
+		}
 	};
-
 	f.wait();
 	std::cout << "Direct result:" << f.getValue() << std::endl;
 

@@ -19,7 +19,7 @@ namespace yasync {
 		std::mutex mutx;
 		std::condition_variable condVar;
 		std::uintptr_t reason;
-		bool alerted;
+		std::atomic_bool alerted;
 
 	};
 
