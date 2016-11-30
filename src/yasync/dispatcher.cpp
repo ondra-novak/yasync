@@ -130,7 +130,7 @@ void Dispatcher::close() {
 
 AlertFn operator >> (DispatchFn  dispatcher, AlertFn target)
 {
-	return AlertFn::call([dispatcher, target](const std::uintptr_t *reason) {
+	return AlertFn::callFn([dispatcher, target](const std::uintptr_t *reason) {
 		if (reason) {
 			std::uintptr_t reasonValue = *reason;
 			dispatcher >> [target,reasonValue] {

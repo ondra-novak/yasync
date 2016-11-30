@@ -81,6 +81,11 @@ public:
 		return DispatchedFunction<Fn, typename std::result_of<Fn()>::type>::dispatch(obj, fn);
 	}
 
+	///Dispatch already prepared AbstractDispatchedFunction
+	bool operator>>(const RefCntPtr<AbstractDispatchedFunction> fn) {
+		return obj->dispatch(fn);
+	}
+
 	bool operator==(const DispatchFn &other) const { return obj == other.obj; }
 	bool operator!=(const DispatchFn &other) const { return obj != other.obj; }
 

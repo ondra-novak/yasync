@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lockScope.h"
 #include "waitqueue.h"
 #include "fastmutex.h"
 
@@ -24,8 +25,11 @@ public:
 	///Initialize the semaphore with initial count
 	/**
 	 * @param initialCount initial count. If zero is set, the semafore is closed, otherwise it is opened
+	 * @param order controls ordering of threads in queue. Default is fifo. You can change to lifo if you need
+	 *  to ordering threads to a stack
 	 */
-	Semaphore(unsigned int initialCount): WaitQueue<Semaphore>(WaitQueue<Semaphore>::fifo),count(initialCount) {}
+	Semaphore(unsigned int initialCount, bool lifoOrder = false)
+			: WaitQueue<Semaphore>(lifoOrder?WaitQueue<Semaphore>::lifo:WaitQueue<Semaphore>::fifo),count(initialCount) {}
 
 
 	///Lock the semaphore (semaphore works as lock)

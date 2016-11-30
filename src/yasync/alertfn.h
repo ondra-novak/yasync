@@ -53,6 +53,8 @@ public:
 class AlertFn
 {
 public:
+	///Construct AlertFn using existing AbstractAlertFunction object
+	/** it is ok to construct AlertFn with nullptr. Such alert variable will not generate alert */
 	AlertFn(RefCntPtr<AbstractAlertFunction> obj):obj(obj) {}
 	///Create alert function which wakes current thread
 	/**
@@ -74,7 +76,7 @@ public:
 	  alert through the dispatcher. See DispatchFn
 	  */
 	template<typename Fn>
-	static AlertFn call(const Fn &fn) {
+	static AlertFn callFn(const Fn &fn) {
 		class F : public AbstractAlertFunction {
 		public:
 			virtual void wakeUp(const std::uintptr_t *reason) throw() {
@@ -91,7 +93,7 @@ public:
 
 	///Make alert without reason
 	void operator()() const throw() {
-		obj->wakeUp();
+		if (obj != nullptr) obj->wakeUp();
 	}
 	///Make alert with a reason
 	/**
@@ -101,7 +103,7 @@ public:
 	 * on target implementation
 	 */
 	void operator()(std::uintptr_t reason) const throw() {
-		obj->wakeUp(&reason);
+		if (obj != nullptr) obj->wakeUp(&reason);
 	}
 
 	bool operator==(const AlertFn &other) const { return obj == other.obj; }

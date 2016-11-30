@@ -142,15 +142,15 @@ namespace yasync {
 		static RetT dispatch(AbstractDispatcher *disp, const Fn &fn) {
 			Future<RetV> f;
 			Promise<RetV> p = f.getPromise();
-			auto fn = [fn,p] {
+			auto fnx = [fn,p] {
 				try {
 					p.setValue(fn());
 				}
 				catch (...) {
 					p.setException(std::current_exception());
 				}
-			}
-			disp->dispatch(new DispatchedFunction<decltype(fn),void>(fn));
+			};
+			disp->dispatch(new DispatchedFunction<decltype(fnx),void>(fnx));
 			return f;
 		}
 	};

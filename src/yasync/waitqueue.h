@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+#include "lockScope.h"
 #include "alertfn.h"
 
 namespace yasync {
@@ -32,11 +34,21 @@ namespace yasync {
 				,alerted(false)
 				,removed(false)
 				,next(nullptr) {
-				q.subscribe(*this);
+				queue.subscribe(*this);
 			}
 
+			Ticket(const Ticket &t)
+				:alertFn(t.alertFn)
+				,queue(t.queue)
+				,alerted(t.alerted.load(std::memory_order_acquire))
+				,removed(t.removed.load(std::memory_order_acquire))
+				,next(nullptr) {
+				queue.subscribe(*this);
+			}
+
+
 			~Ticket() {
-				if (!alerted && !removed)
+				if (!alerted.load(std::memory_order_release) && !removed.load(std::memory_order_release))
 					queue.signoff(*this);
 			}
 
@@ -45,13 +57,13 @@ namespace yasync {
 			 * @retval true not alerted yet
 			 * @retval false alerted
 			 */
-			bool operator!() const {return !alerted;}
+			bool operator!() const {return !alerted.load(std::memory_order_release);}
 			///Ask ticket whether is alerted
 			/**
 			 * @retval false not alerted yet
 			 * @retval true alerted
 			 */
-			operator bool() const {return alerted;}
+			operator bool() const {return alerted.load(std::memory_order_release);}
 			bool operator==(bool x) const {return alerted == x;}
 			bool operator!=(bool x) const {return alerted != x;}
 
@@ -59,8 +71,8 @@ namespace yasync {
 			friend class WaitQueue<Impl>;
 			AlertFn alertFn;
 			WaitQueue &queue;
-			bool alerted;
-			bool removed;
+			std::atomic_bool alerted;
+			std::atomic_bool removed;
 			Ticket *next;
 		};
 
@@ -91,12 +103,35 @@ namespace yasync {
 			return true;
 		}
 
-	protected:
+		///Wait in the queue
+		/** Creates ticket and waits in the queue */
+		template<typename Lk>
+		void unlockAndWait(Lk &lk) {
+			auto t = static_cast<Impl &>(*this).ticket();
+			UnlockScope<Lk> _(lk);
+			while (!t) halt();
+		}
+
+		///Wait in the queue
+		/** Creates ticket and waits in the queue for specified timeout*/
+		template<typename Lk>
+		bool unlockAndWait(const Timeout &tm, Lk &lk) {
+			auto t = static_cast<Impl &>(*this).ticket();
+			UnlockScope<Lk> _(lk);
+			while (!t) {
+				if (sleep(tm)) return false;
+			}
+			return true;
+		}
+
 
 		enum QueueMode {
 			lifo,
 			fifo
 		};
+
+
+	protected:
 
 		///Initialize the queue
 		WaitQueue(QueueMode mode):mode(mode),top(nullptr),bottom(nullptr) {}
@@ -143,7 +178,7 @@ namespace yasync {
 		 * @return
 		 */
 		bool remove(Ticket &t) {
-			if (!t.alerted && !t.removed) {
+			if (!t.alerted.load(std::memory_order_acquire) && !t.removed.load(std::memory_order_acquire)) {
 				Ticket *x = top;
 				if (x == &t) {
 					top = t.next;
@@ -159,7 +194,7 @@ namespace yasync {
 					if (x == nullptr)
 						return false;
 				}
-				t.removed = true;
+				t.removed.store(true,std::memory_order_release);
 			}
 			return true;
 		}
@@ -209,7 +244,7 @@ namespace yasync {
 		void alert(Ticket &t) {
 			t.next = nullptr;
 			AlertFn alertFn = t.alertFn;
-			t.alerted = true;
+			t.alerted.store(true,std::memory_order_release);
 			alertFn();
 		}
 
@@ -218,6 +253,29 @@ namespace yasync {
 		QueueMode mode;
 		Ticket *top;
 		Ticket *bottom;
+
+	};
+
+	///Implements final wait queue without locks, so it must be controlled by single thread at once (under locks)
+	class WaitQueueMTUnsafe: public WaitQueue<WaitQueueMTUnsafe> {
+	public:
+
+		WaitQueueMTUnsafe(QueueMode mode):WaitQueue<WaitQueueMTUnsafe>(mode) {}
+
+		using WaitQueue<WaitQueueMTUnsafe>::alertOne;
+		using WaitQueue<WaitQueueMTUnsafe>::alertAll;
+		using WaitQueue<WaitQueueMTUnsafe>::alert;
+
+	protected:
+		friend class WaitQueue<WaitQueueMTUnsafe>;
+
+		void onSubscribe(typename WaitQueue<WaitQueueMTUnsafe>::Ticket &t) {
+			add(t);
+		}
+		void onSignoff(typename WaitQueue<WaitQueueMTUnsafe>::Ticket &t) {
+			remove(t);
+		}
+
 
 	};
 
