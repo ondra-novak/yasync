@@ -23,6 +23,7 @@
 #include <functional>
 #include "../yasync/future.h"
 #include "../yasync/futuredispatch.h"
+#include "../yasync/checkpoint.h"
 
 
 
