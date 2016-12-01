@@ -24,6 +24,9 @@ public:
 		: pt(std::chrono::steady_clock::now() + dur) {}
 
 
+	static Timeout infinity;
+	static Timeout now() {return Timeout();}
+
 	///returns time when expires.
 	/** However, if timeout is set to "never expires" return value is unspecified */
 	operator Clock() const {
