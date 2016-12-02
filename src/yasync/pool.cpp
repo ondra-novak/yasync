@@ -10,7 +10,6 @@
 
 #include "semaphore.h"
 #include "fastmutex.h"
-#include "thread.h"
 
 using std::deque;
 namespace yasync {
@@ -153,7 +152,7 @@ namespace yasync {
 	void ThreadPoolImpl::startThread() {
 		PPool me = this;
 		++threadCount;
-		::yasync::thread >> [me] {
+		::yasync::newThread >> [me] {
 			me->runWorker();
 		};
 	}

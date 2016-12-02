@@ -19,14 +19,17 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="checkpoint.cpp" />
     <ClCompile Include="dispatcher.cpp" />
     <ClCompile Include="pool.cpp" />
     <ClCompile Include="rwMutex.cpp" />
     <ClCompile Include="sandman.cpp" />
-    <ClCompile Include="thread.cpp" />
+    <ClCompile Include="scheduler.cpp" />
+    <ClCompile Include="timeout.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="alertfn.h" />
+    <ClInclude Include="checkpoint.h" />
     <ClInclude Include="dispatcher.h" />
     <ClInclude Include="fastmutex.h" />
     <ClInclude Include="fastmutexrecursive.h" />
@@ -38,10 +41,9 @@
     <ClInclude Include="pool.h" />
     <ClInclude Include="refcnt.h" />
     <ClInclude Include="sandman.h" />
+    <ClInclude Include="scheduler.h" />
     <ClInclude Include="semaphore.h" />
     <ClInclude Include="rwMutex.h" />
-    <ClInclude Include="syncpt.h" />
-    <ClInclude Include="thread.h" />
     <ClInclude Include="timeout.h" />
     <ClInclude Include="waitqueue.h" />
   </ItemGroup>

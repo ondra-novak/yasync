@@ -1,11 +1,21 @@
 #pragma once
 
 #include <functional>
+#include <thread>
 #include "refcnt.h"
 #include "alertfn.h"
 
 
 namespace yasync {
+
+	enum _XNewThread {
+		newThread
+	};
+
+	enum _XThisThread {
+		thisThread
+	};
+
 
 class Timeout;
 
@@ -65,8 +75,14 @@ class DispatchFn {
 public:
 	///Construct dispatch function
 	DispatchFn(RefCntPtr<AbstractDispatcher> obj):obj(obj) {}
-	///Retrieve dispatch function for current thread.
-	static DispatchFn currentThread();
+	///Retrieves dispatch function for current thread.
+	static DispatchFn thisThread();
+	///Retrieves dispatch function which will always create a new thread
+	static DispatchFn newThread();
+	///Creates special thread which is able to dispatch functions. 
+	/** Functions are dispatched through a queue. The last reference of this
+	    thread destroys the thread, but after all messages are dispatched */
+	static DispatchFn newDispatchThread();
 
 
 	///Dispatch a function to the target thread
@@ -82,7 +98,7 @@ public:
 	}
 
 	///Dispatch already prepared AbstractDispatchedFunction
-	bool operator>>(const RefCntPtr<AbstractDispatchedFunction> fn) {
+	bool operator>>(const AbstractDispatcher::Fn &fn) const {
 		return obj->dispatch(fn);
 	}
 
@@ -107,6 +123,43 @@ through the exception
 */
 AlertFn operator>> (DispatchFn dispatcher, AlertFn target);
 
+///Route the dispatching through multiple dispatchers
+/**
+ @param first first dispatcher, which receives function to dispatch. If dispatcher
+ rejects the request, dispatching fails. 
+ @param second second dispatcher, where the function will be routed to dispatch, If
+  dispatcher fails, the function executes in context of first dispatcher
+ @return DispatchFn which handles whole routing.
+
+ You can for example route function from the scheduler to a specified thread 
+
+ @code
+ yasync::at(1000) >> mythread >> [] { std::cout << "Hello"; };
+ @endcode
+
+ Above example will at given time dispatches function at the right side through the mythread
+
+*/
+DispatchFn operator >> (DispatchFn first, DispatchFn second);
+
+///Dispatch function from the first dispatcher to the new thread
+/**
+@note This is faster equivalent of first >> DispatchFn::newThreaad()
+*/
+DispatchFn operator >> (DispatchFn first, _XNewThread);
+
+///Dispatch function from the first dispatcher to the current thread
+/**
+@param first first dispatcher.
+
+The "current thread" is evaluated in context of this call, not context of the dispatcher. Operator
+is able to post function back to current thread. The current thread need to execute dispatching
+functions time to time.
+
+@note This is faster equivalent of first >> DispatchFn::thisThread()
+*/
+DispatchFn operator >> (DispatchFn first, _XThisThread);
+
 ///sleeping for specified time which can be interrupted by an alert or dispatched function
 /**
  * @param tm maximal timeout to wait
@@ -125,6 +178,29 @@ bool sleepAndDispatch(const Timeout &tm, std::uintptr_t *reason = nullptr);
  * @return reason carried by an alert otherwise zero.
  */
 std::uintptr_t haltAndDispatch();
+
+template<typename Fn, typename RetV>
+struct RunThreadFn;
+
+template<typename Fn>
+struct RunThreadFn<Fn, void> {
+	typedef void ReturnType;
+	static void runThread(const Fn &fn) {
+		std::thread t(fn);
+		t.detach();
+	}
+};
+
+
+template<typename Fn>
+auto operator >> (_XNewThread, const Fn &fn) -> typename RunThreadFn<Fn, typename std::result_of<Fn()>::type>::ReturnType {
+	return RunThreadFn<Fn, typename std::result_of<Fn()>::type>::runThread(fn);
+}
+
+template<typename Fn>
+auto operator >> (_XThisThread, const Fn &fn) {
+	return DispatchFn::thisThread() >> fn;
+}
 
 
 }

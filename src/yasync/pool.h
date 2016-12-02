@@ -60,7 +60,8 @@ public:
 	 * When thread has no task assigned, it doing idle waiting. You can specify timeout in milliseconds, how
 	 *  long the thread can be idle until it is stopped
 	 *
-	 * @param idleTimeout how long in milliseconds will thread wait idle until it is stopped
+	 * @param idleTimeout how long in milliseconds will thread wait idle until it is stopped.
+	 *   The zero argument means no timeout
 	 */
 	ThreadPool &setIdleTimeout(unsigned int idleTimeout) {
 		this->idleTimeout = idleTimeout;
@@ -141,8 +142,9 @@ public:
 	 * This can prevent various deadlocks, if - for example - pool's thread sending synchornous request to the
 	 * caller. The thread can wait to dispatch message in thread which waiting on full queue can result in deadlock
 	 */
-	void setDispatchOnWait(bool dispatchOnWait) {
+	ThreadPool &setDispatchOnWait(bool dispatchOnWait) {
 		this->dispatchOnWait = dispatchOnWait;
+		return *this;
 	}
 
 	unsigned int getQueueTimeout() const {
@@ -155,8 +157,9 @@ public:
 	 * it is default. You can define own timeout in this function. Timeouted dispatching is reported through return
 	 * value of DispatchFn or through canceled future in case that futures has been used
 	 */
-	void setQueueTimeout(unsigned int queueTimeout) {
+	ThreadPool &setQueueTimeout(unsigned int queueTimeout) {
 		this->queueTimeout = queueTimeout;
+		return *this;
 	}
 
 	const AlertFn& getFinalStop() const {
@@ -174,8 +177,9 @@ public:
 	 *
 	 *
 	 */
-	void setFinalStop(const AlertFn& finalStop) {
+	ThreadPool &setFinalStop(const AlertFn& finalStop) {
 		this->finalStop = finalStop;
+		return *this;
 	}
 
 	///this command passed to the pool causes, that current queue will be cleared.

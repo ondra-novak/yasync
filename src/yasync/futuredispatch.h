@@ -91,10 +91,10 @@ namespace yasync {
 	*  future. This causes, that even resolved future will call the chain through the dispatcher. This prevents
 	*  to various race conditions
 	*/
-	template<typename T>
-	class DispatchedFuture : public Future<T> {
+	template<typename Src, typename Trg>
+	class DispatchedFuture {
 	public:
-		DispatchedFuture(const Future<T> connectTo, const DispatchFn &dispatcher)
+		DispatchedFuture(const Future<Src> connectTo, const DispatchFn &dispatcher)
 			:connectTo(connectTo), dispatcher(dispatcher), connected(false) {}
 		~DispatchedFuture() {
 			if (!connected) connect();

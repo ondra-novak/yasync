@@ -12,6 +12,7 @@
 #include <deque>
 
 #include "fastmutex.h"
+#include "pool.h"
 namespace yasync {
 
 class Dispatcher: public AbstractDispatcher {
@@ -56,7 +57,7 @@ static RefCntPtr<Dispatcher> getCurrentDispatcher()  {
 	return curDispatcher;
 }
 
-DispatchFn DispatchFn::currentThread() {
+DispatchFn DispatchFn::thisThread() {
 	RefCntPtr<AbstractDispatcher> x = RefCntPtr<AbstractDispatcher>::staticCast(getCurrentDispatcher());
 	return DispatchFn(x);
 }
@@ -144,6 +145,93 @@ AlertFn operator >> (DispatchFn  dispatcher, AlertFn target)
 		}
 	});
 }
+
+
+class NewThreadDispatch : public AbstractDispatcher {
+public:
+
+	NewThreadDispatch() {
+		addRef();
+	}
+
+	virtual bool dispatch(const Fn &fn) throw() {
+		newThread >> [fn] {
+			fn->run();
+		};
+		return true;
+	}
+
+};
+
+DispatchFn DispatchFn::newThread() {
+	static NewThreadDispatch dispatch;
+	return DispatchFn(static_cast<AbstractDispatcher *>(&dispatch));
+}
+
+DispatchFn DispatchFn::newDispatchThread()
+{
+	ThreadPool pool;
+	return pool.setIdleTimeout(0)
+		.setMaxQueue(-1)
+		.setMaxThreads(1)
+		.setQueueTimeout(0)
+		.start();
+}
+
+class CombineDispatchers : public AbstractDispatcher {
+public:
+	CombineDispatchers(DispatchFn first, DispatchFn second)
+		:first(first), second(second) {}
+
+	virtual bool dispatch(const Fn &fn) throw () {
+
+		DispatchFn s = second;		
+		return first >> [s,fn] {
+			if (!(s >> fn)) {
+				if (fn != nullptr) fn->run();
+			}
+		};
+	}
+protected:
+	DispatchFn first;
+	DispatchFn second;
+
+};
+
+DispatchFn operator >> (DispatchFn first, DispatchFn second)
+{
+	RefCntPtr<AbstractDispatcher> d(new CombineDispatchers(first, second));
+	return d;
+}
+
+class DispatchToNewThread : public AbstractDispatcher {
+public:
+	DispatchToNewThread(DispatchFn first)
+		:first(first) {}
+
+	virtual bool dispatch(const Fn &fn) throw () {
+
+		return first >> [fn] {
+			newThread >> [fn] {fn->run(); };
+		};
+	}
+protected:
+	DispatchFn first;
+
+};
+
+
+DispatchFn operator >> (DispatchFn first, _XNewThread)
+{
+	RefCntPtr<AbstractDispatcher> d(new DispatchToNewThread(first));
+	return d;
+}
+
+DispatchFn operator >> (DispatchFn first, _XThisThread)
+{
+	return first >> DispatchFn::thisThread();
+}
+
 
 
 }

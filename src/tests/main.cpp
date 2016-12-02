@@ -18,7 +18,6 @@
 #include "../yasync/fastmutexrecursive.h"
 #include "../yasync/gate.h"
 #include "../yasync/semaphore.h"
-#include "../yasync/thread.h"
 #include "../yasync/rwmutex.h"
 #include <functional>
 #include "../yasync/future.h"
@@ -32,7 +31,7 @@
 int main(int , char **) {
 	TestSimple tst;
 
-	yasync::Future<double> f = yasync::thread >> [] {
+	yasync::Future<double> f = yasync::newThread >> [] {
 
 		yasync::sleep(10000);
 		return 42;

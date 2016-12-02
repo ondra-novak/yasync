@@ -8,7 +8,6 @@
 #include "scheduler.h"
 
 #include "lockScope.h"
-#include "thread.h"
 namespace yasync {
 
 Scheduler::Scheduler():workerAlert(nullptr),running(false) {
@@ -27,7 +26,7 @@ void Scheduler::enqueue(RefCntPtr<ScheduledFn> fn) {
 	LockScope<FastMutex> _(lk);
 	queue.push(fn);
 	if (!running) {
-		thread >> [this] {
+		newThread >> [this] {
 			this->runWorker();
 		};
 		running = true;
