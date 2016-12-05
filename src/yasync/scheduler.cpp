@@ -38,17 +38,26 @@ void Scheduler::enqueue(RefCntPtr<ScheduledFn> fn) {
 
 void Scheduler::runWorker() {
 	LockScope<FastMutex> _(lk);
-	workerAlert = AlertFn::currentThread();
+	workerAlert = AlertFn::thisThread();
 	Timeout tm = timeOfNextEvent();
-	while (tm != Timeout::infinity) {
-		Timeout now = Timeout::now();
-		if (tm <= now) {
-			runFirstEvent();
-		} else {
-			UnlockScope<FastMutex> _(lk);
-			sleep(tm);
+	do {
+		while (tm != Timeout::infinity) {
+			Timeout now = Timeout::now();
+			if (tm <= now) {
+				runFirstEvent();
+			}
+			else {
+				UnlockScope<FastMutex> _(lk);
+				sleep(tm);
+			}
+			tm = timeOfNextEvent();
 		}
-	}
+		{
+			UnlockScope<FastMutex> _(lk);
+			yasync::sleep(991);
+		}
+		tm = timeOfNextEvent();
+	} while (tm != Timeout::infinity);
 	running = false;
 }
 
@@ -92,7 +101,19 @@ void Scheduler::ScheduledFn::runScheduled() throw() {
 }
 
 
-Scheduler at;
+Scheduler scheduler;
 
+
+
+
+DispatchFn at(const Timeout & t)
+{
+	return scheduler(t);
+}
+
+bool Scheduler::CompareItems::operator()(const RefCntPtr<ScheduledFn>& a, const RefCntPtr<ScheduledFn>& b) const
+{
+	return a->getTime() > b->getTime();
+}
 
 }

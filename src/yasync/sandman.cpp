@@ -13,8 +13,8 @@ SandMan::SandMan():reason(0),alerted(false) {
 
 void SandMan::wakeUp(const std::uintptr_t* reason) throw () {
 	std::lock_guard<std::mutex> _(mutx);
-	alerted.store(true, std::memory_order_release);
 	if (reason) this->reason = *reason;
+	alerted.store(true, std::memory_order_release);
 	condVar.notify_all();
 }
 
@@ -70,7 +70,7 @@ std::uintptr_t halt()
 	return getCurrentSandman()->halt();
 }
 
-AlertFn AlertFn::currentThread() {
+AlertFn AlertFn::thisThread() {
 	RefCntPtr<AbstractAlertFunction> x = RefCntPtr<AbstractAlertFunction>::staticCast(getCurrentSandman());
 	return AlertFn(x);
 }

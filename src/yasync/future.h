@@ -19,9 +19,10 @@ namespace yasync {
 
 	template<typename T> class Promise;
 	template<typename T> class Future;
-	template<typename T> class DispatchedFuture;
+	template<typename T, typename U> class DispatchedFuture;
 	template<> class Promise<void>;
 	template<> class Future<void>;
+	class Checkpoint;
 
 ///observes result of promise and performs some action with it
 template<typename T>
@@ -284,7 +285,7 @@ template<typename T> class Future {
 	/** You should store the result for resolving. Destroying the promise
 	object without resolving causes resolvion of the promise with 
 	an exception of type CanceledPromise */
-	Promise<T> getPromise();
+	Promise<T> getPromise() const;
 	
 	///Determines, whether the future object is connected with a promise object
 	/**
@@ -343,7 +344,7 @@ template<typename T> class Future {
 		value->removeObserver(obs);
 	}
 
-	///This observer generates alert when the Future is resolved. Value is ignored, you have to retrieve it from the Future object
+	///This observer generates alert when the Future is resolved. Value is ignored, you have to retrieve it from the Future object	
 	class AlertObserver: public AbstractPromiseObserver<T> {
 	public:
 		AlertObserver(const AlertFn &alert) :alert(alert),alerted(false) {}
@@ -365,7 +366,7 @@ template<typename T> class Future {
 	 */
 	void wait() const {
 		if (!isResolved()) {
-			AlertObserver obs(AlertFn::currentThread());
+			AlertObserver obs(AlertFn::thisThread());
 			addObserver(&obs);
 			while (!obs.alerted) {
 				halt();
@@ -384,7 +385,7 @@ template<typename T> class Future {
 	*/
 	bool wait(const Timeout &tm) const {
 		if (!isResolved()) {
-			AlertObserver obs(AlertFn::currentThread());
+			AlertObserver obs(AlertFn::thisThread());
 			addObserver(&obs);
 			while (!obs.alerted)
 				if (!sleep(tm)) {
@@ -456,6 +457,15 @@ template<typename T> class Future {
 		catch (...) {
 			value->cancel(std::current_exception());
 		}
+	}
+
+	///Futures are equal if they are shared from the same source
+	bool operator==(const Future &other) const {
+		return value == other.value;
+	}
+	///Futures are equal if they are shared from the same source
+	bool operator!=(const Future &other) const {
+		return value == other.value;
 	}
 
 protected:
@@ -759,7 +769,18 @@ auto operator >> (const Future<T> &future, const Fn &fn) -> typename _hlp::Futur
 }
 
 template<typename T>
-inline Promise<T> Future<T>::getPromise() {
+Future<T> operator >> (const Future<T> &future, const AlertFn &fn) {
+	return _hlp::ChainAnythingObserver<T, void, AlertFn>::makeChain(future, fn);
+}
+
+template<typename T>
+Future<T> operator >> (const Future<T> &future, const Checkpoint &fn) {
+	return _hlp::ChainAnythingObserver<T, void, Checkpoint>::makeChain(future, fn);
+}
+
+
+template<typename T>
+inline Promise<T> Future<T>::getPromise() const {
 	return Promise<T>(value);
 }
 

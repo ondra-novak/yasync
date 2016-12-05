@@ -21,6 +21,7 @@ public:
 	Dispatcher(const AlertFn &alert):alert(alert),opened(true) {}
 	virtual bool dispatch(const Fn &fn) throw();
 	virtual bool sleep(const Timeout &tm, std::uintptr_t *reason);
+	virtual bool yield() throw();
 	virtual std::uintptr_t halt();
 
 
@@ -48,18 +49,24 @@ public:
 
 
 static thread_local DispatcherControl curDispatcher;
+static thread_local IDispatchQueueControl *queueControl = nullptr;
 
 static RefCntPtr<Dispatcher> getCurrentDispatcher()  {
 	RefCntPtr<Dispatcher> x = curDispatcher;
 	if (x == nullptr) {
-		x = curDispatcher = new Dispatcher(AlertFn::currentThread());
+		x = curDispatcher = new Dispatcher(AlertFn::thisThread());
 	}
 	return curDispatcher;
 }
 
 DispatchFn DispatchFn::thisThread() {
-	RefCntPtr<AbstractDispatcher> x = RefCntPtr<AbstractDispatcher>::staticCast(getCurrentDispatcher());
-	return DispatchFn(x);
+	if (queueControl == nullptr) {
+		RefCntPtr<AbstractDispatcher> x = RefCntPtr<AbstractDispatcher>::staticCast(getCurrentDispatcher());
+		return DispatchFn(x);
+	}
+	else {
+		return queueControl->getDispatch();
+	}
 }
 
 
@@ -100,6 +107,22 @@ bool Dispatcher::sleep(const Timeout& tm, std::uintptr_t* reason) {
 	}
 	return false;
 
+}
+
+bool Dispatcher::yield() throw()
+{
+	lk.lock();
+	if (!fnqueue.empty()) {
+		Fn fn = fnqueue.front();
+		fnqueue.pop_back();
+		lk.unlock();
+		fn->run();
+		return true;
+	}
+	else {
+		lk.unlock();
+		return false;
+	}
 }
 
 std::uintptr_t Dispatcher::halt() {
@@ -232,6 +255,13 @@ DispatchFn operator >> (DispatchFn first, _XThisThread)
 	return first >> DispatchFn::thisThread();
 }
 
+bool yield() {
+	if (queueControl == nullptr) return false;
+	else return queueControl->yield();
+}
 
+void IDispatchQueueControl::setThreadQueueControl(IDispatchQueueControl *qc) {
+	queueControl = qc;
+}
 
 }

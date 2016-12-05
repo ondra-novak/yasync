@@ -99,7 +99,7 @@ public:
 	 * @param initCount initial count. If this argument is zero, then gate is initialy open.
 	 * Setting other number closes gate and starts counting for events
 	 */
-	CountGate(unsigned int initCount)
+	CountGate(unsigned int initCount=0)
 		:Super(Super::fifo)
 		,curCount(initCount) {}
 
@@ -128,6 +128,8 @@ public:
 	~CountGate() {
 		lock.lock();
 	}
+
+
 
 
 protected:

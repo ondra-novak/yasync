@@ -90,7 +90,6 @@ protected:
 
 };
 
-extern Scheduler at;
 
 
 } /* namespace yasync */

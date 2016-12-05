@@ -10,6 +10,7 @@
 
 #include "semaphore.h"
 #include "fastmutex.h"
+#include "dispatcher.h"
 
 using std::deque;
 namespace yasync {
@@ -18,7 +19,7 @@ namespace yasync {
 	class ThreadPoolImpl;
 	typedef RefCntPtr<ThreadPoolImpl> PPool;
 
-	class ThreadPoolImpl: public RefCntObj {
+	class ThreadPoolImpl: public AbstractDispatcher {
 	public:
 
 		typedef ThreadPool Config;
@@ -33,6 +34,9 @@ namespace yasync {
 		~ThreadPoolImpl() {
 			cfg.getFinalStop()();
 		}
+
+		bool yield(unsigned int recursion) throw();
+
 
 	protected:
 		Config cfg;
@@ -71,6 +75,7 @@ namespace yasync {
 		void runWorkerCycle() throw();
 	bool queueIsFull();
 	bool queueIsEmpty();
+
 };
 
 	ThreadPoolImpl::ThreadPoolImpl(const Config& cfg)
@@ -142,6 +147,7 @@ namespace yasync {
 	}
 
 	void ThreadPoolImpl::finish() {
+		LockScope<FastMutex> _(lk);
 		//mark finish flag
 		finishFlag = true;
 		//release all waiting workers
@@ -149,29 +155,78 @@ namespace yasync {
 
 	}
 
-	void ThreadPoolImpl::startThread() {
-		PPool me = this;
-		++threadCount;
-		::yasync::newThread >> [me] {
-			me->runWorker();
-		};
-	}
-
-	void ThreadPoolImpl::runWorker() throw() {
-
-		cfg.getThreadStart()();
-
-		//run worker's cycle
-		runWorkerCycle();
-
-		cfg.getThreadStop()();
-	}
-
 	bool ThreadPoolImpl::queueIsEmpty() {
 		return queue.empty() && !finishFlag;
 	}
 
-inline void ThreadPoolImpl::runWorkerCycle() throw() {
+	bool ThreadPoolImpl::yield(unsigned int recursion) throw()
+	{
+		if (recursion > cfg.getMaxYieldRecursion()) 
+			return false;
+		if (queue.empty()) {
+			return false;
+		}
+		LockScope<FastMutex> _(lk);
+		if (!queue.empty()) {
+			AbstractDispatcher::Fn fn = queue.front();
+			queue.pop_front();
+			//alert any waiting thread for empty queue
+			queueTrigger.alertOne();
+			//unlock pool - task will not interact with it
+			UnlockScope<FastMutex> _(lk);
+			//run task
+			fn->run();
+			return true;
+		}
+		return false;
+
+	}
+
+
+class ThreadQueueState : public IDispatchQueueControl {
+public:
+	ThreadQueueState(ThreadPoolImpl *poolImpl) :poolImpl(poolImpl), recursionCount(0){}
+
+
+	virtual bool yield()  throw() {
+		recursionCount++;
+		bool res = poolImpl->yield(recursionCount);
+		recursionCount--;
+		return res;
+	}
+	virtual DispatchFn getDispatch() throw() {
+		return static_cast<AbstractDispatcher *>(poolImpl);
+	}
+
+	ThreadPoolImpl *poolImpl;
+	unsigned int recursionCount;
+
+};
+
+
+void ThreadPoolImpl::startThread() {
+	PPool me = this;
+	++threadCount;
+	::yasync::newThread >> [me] {
+		ThreadQueueState st(me);
+		ThreadQueueState::setThreadQueueControl(&st);
+		me->runWorker();
+	};
+}
+
+
+void ThreadPoolImpl::runWorker() throw() {
+
+
+	cfg.getThreadStart()();
+
+	//run worker's cycle
+	runWorkerCycle();
+
+	cfg.getThreadStop()();
+}
+
+void ThreadPoolImpl::runWorkerCycle() throw() {
 	do {
 		//lock the pool - we will interact with it
 		LockScope<FastMutex> _(lk);
@@ -218,6 +273,7 @@ ThreadPool::ThreadPool()
 	,maxQueue(1)
 	,idleTimeout(1000)
 	,queueTimeout(0)
+	,maxYieldRecursion(4)
 	,dispatchOnWait(false)
 	,threadStart(nullptr)
 	,threadStop(nullptr)
@@ -231,5 +287,6 @@ DispatchFn ThreadPool::start() {
 }
 
 RefCntPtr<AbstractDispatchedFunction> ThreadPool::clearQueueCmd(nullptr);
+
 
 }

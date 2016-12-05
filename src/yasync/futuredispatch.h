@@ -4,6 +4,10 @@
 
 namespace yasync {
 
+	enum _XEndChain {
+		endChain
+	};
+
 	namespace _hlp {
 
 		template<typename T>
@@ -91,6 +95,170 @@ namespace yasync {
 	*  future. This causes, that even resolved future will call the chain through the dispatcher. This prevents
 	*  to various race conditions
 	*/
+
+
+	template<typename Initial, typename Final = Future<Initial> >
+	class DispatchedFuture {
+
+	protected:
+		class Observer : public AbstractPromiseObserver<Initial>
+		{
+		public:
+			Observer(const Promise<Initial> &target, const DispatchFn &dispatcher)
+				:target(target), dispatcher(dispatcher) {}
+
+			virtual void operator()(const Initial &value) throw() {
+
+				Promise<Initial> f(target);
+				Initial v(value);
+				dispatcher >> [f, v] { f.setValue(v); };
+				delete this;
+
+			}
+			virtual void operator()(const std::exception_ptr &exception) throw() {
+				Promise<Initial> p(target);
+				std::exception_ptr e(exception);
+				dispatcher >> [p, e] { p.setException(e); };
+				delete this;
+			}
+
+			Promise<Initial> target;
+			Future<Initial> source;
+			DispatchFn dispatcher;
+		};
+
+		template<typename X>
+		void initEndChain(const X &) {
+			//empty - cannot init endChain with argument of differen type
+		}
+
+		void initEndChain(const Final &x) {
+			endChain = x;
+		}
+
+	public:
+
+		typedef typename Final::Type Type;
+		typedef typename Final::PromiseT PromiseT;
+
+
+		DispatchedFuture(const Future<Initial> &connectTo, const DispatchFn &dispatcher)
+			:connectTo(connectTo), endChain(nullptr), dispatcher(dispatcher) 
+		{
+			initEndChain(firstItem);
+		}
+
+		template<typename Z>
+		DispatchedFuture(const DispatchedFuture<Initial, Z> &cur, const Final &endChain)
+			:connectTo(cur.connectTo)
+			, firstItem(cur.firstItem)
+			, endChain(endChain)
+			, dispatcher(cur.dispatcher)
+		{}
+
+		~DispatchedFuture() {
+			connect();
+		}
+
+
+		void connect() const {
+			if (!firstItem.hasPromise()) {
+				connectTo.addObserver(new Observer( firstItem.getPromise(), dispatcher));
+			}
+		}
+
+		operator Final() {
+			connect();
+			return endChain;
+		}
+
+//		static Final fakeFinalVal;
+
+		template<typename X> using FutX = decltype(Final() >> (*(X *)nullptr));
+
+		template<typename Fn>
+		DispatchedFuture<Initial, FutX<Fn> > operator >> (const Fn &fn)   {
+
+			typedef DispatchedFuture<Initial, FutX<Fn> > Ret;
+			return Ret(std::move(*this), endChain >> fn);
+		}
+
+
+		bool hasPromise() const { 
+			return endChain.hasPromise();
+		}
+
+		bool isResolved() const { 
+			return endChain.isResolved();
+		}
+
+		const Type *tryGetValue() const { 
+			return endChain.tryGetValue();
+		}
+
+		std::exception_ptr getException() const { 
+			return endChain.getException();
+		}
+
+		void addObserver(AbstractPromiseObserver<Type> *obs) const {
+			return endChain.addObserver(obs);
+		}
+
+		bool removeObserver(AbstractPromiseObserver<Type> *obs) const {
+			return endChain.removeObserver(obs);
+		}
+
+		void wait() const {
+			connect();
+			return endChain.wait();
+		}
+
+		bool wait(const Timeout &tm) const {
+			connect();
+			return endChain.wait();
+		}
+
+		const Type &getValue() const {
+			connect();
+			return endChain.getValue();
+		}
+
+		const Type &get() const {
+			connect();
+			return endChain.get();
+		}
+
+		operator const Type &() const {
+			return get();
+		}
+
+		DispatchedFuture isolate() const {
+			return DispatchedFuture(*this, endChain.isolate());
+		}
+
+		operator Final() const {
+			connect();
+			return endChain;
+		}
+
+		Final operator >> (_XEndChain) const {
+			connect();
+			return endChain;
+		}
+
+
+	protected:
+		template<typename X, typename Y> friend class DispatchedFuture;
+
+		Future<Initial> connectTo;
+		Future<Initial> firstItem;
+		Final endChain;
+		DispatchFn dispatcher;
+
+
+	};
+
+#if 0
 	template<typename Src, typename Trg>
 	class DispatchedFuture {
 	public:
@@ -119,7 +287,7 @@ namespace yasync {
 		bool connected;
 
 	};
-
+#endif
 	///Create future which is resolved in other thread (through the dispatcher)
 	/**
 	* @param dispatcher dispatcher used to route processing into other thread

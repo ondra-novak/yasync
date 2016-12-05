@@ -37,8 +37,6 @@ public:
 	virtual ~AbstractDispatcher() {}
 
 };
-
-
 template<typename Fn, typename RetV> class DispatchedFunction;
 template<typename Fn> class DispatchedFunction<Fn, void> : public AbstractDispatchedFunction {
 public:
@@ -76,6 +74,9 @@ public:
 	///Construct dispatch function
 	DispatchFn(RefCntPtr<AbstractDispatcher> obj):obj(obj) {}
 	///Retrieves dispatch function for current thread.
+	/** If the thread is part of thread pool, it returns dispatching function for
+	the whole pool. In this case, function dispatched through the such dispatcher
+	can be executed in any other thread belongs to current thread pool */
 	static DispatchFn thisThread();
 	///Retrieves dispatch function which will always create a new thread
 	static DispatchFn newThread();
@@ -109,6 +110,17 @@ protected:
 	RefCntPtr<AbstractDispatcher> obj;
 
 };
+
+
+class IDispatchQueueControl {
+public:
+	virtual bool yield() throw() = 0;
+	virtual DispatchFn getDispatch() throw() = 0;
+	virtual ~IDispatchQueueControl() {}
+	static void setThreadQueueControl(IDispatchQueueControl *qc);
+};
+
+
 
 
 ///Dispatches an alert
@@ -178,6 +190,42 @@ bool sleepAndDispatch(const Timeout &tm, std::uintptr_t *reason = nullptr);
  * @return reason carried by an alert otherwise zero.
  */
 std::uintptr_t haltAndDispatch();
+
+///Creates dispatcher which executes function after given time
+/**
+ This dispatcher can handle only one function. Second, and more functions
+ cancels previous one until the specified time happen. After the function
+ is executed, the dispatcher stops accepting functions.
+
+ The global scheduler creates just one thread for scheduling. Functions are
+ executed in its thread. It is ok for short functions. For long functions, execution
+ should be dispatched to the other thread.
+
+ @code
+ at(1000) >> newThread >> []{...};
+ @endcode
+ */
+DispatchFn at(const Timeout &t);
+
+///Processes one function in the dispatch queue and immediatielly returns
+/**
+Function has same effect as sleepAndDispatch(0), however it doesn't receive state of alert (
+unless the state is retrieved by dispatched function).
+
+The function is defined for dispatching threads and thread pools. If called in none
+of such thread, it returns false.
+
+@retval true successfully processed function from the queue
+@retval false nothing happened
+
+There can be more reasons why the function can return false
+ * there is none function waiting in the queue
+ * maximum yield recursion has been reached 
+ * thread doesn't support the function yield()
+*/
+
+bool yield();
+
 
 template<typename Fn, typename RetV>
 struct RunThreadFn;

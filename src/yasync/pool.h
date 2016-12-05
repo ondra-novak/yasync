@@ -38,11 +38,27 @@ public:
 	ThreadPool();
 
 	///Starts the thread pool
-	/** Once the thread pool is started, its parameters cannot be changed. If you need to change parameters, you
-	 * have to start new pool. You should also destroy the reference to old pool
-	 * @return
+	/**
+	 * @return dispatcher to dispatch functions into the pool.
+	 *
+	 * @note To terminate the thread pool, you have to destroy 
+	 * returned function (all its references). Once all references are
+	 * destroyed, the thread pool enters into fininish state. It closes the
+	 * queue and finishes all tasks in there. After all tasks are finished, it
+	 * releases memory and sends finalStop alert.
+	 *
+	 * @note Function executed inside the thread pool can retrieve another dispatcher through
+	 * the DispatchFn::thisThread(). Returned dispatcher will send functions to the
+	 * thread pool instead to particular thread as usual. However, this instance
+	 * of the DispatchFn is not equal to the function returned by the function start().
+	 * It is not counted as reference, so the thread is still able to enter
+	 * into finish state even if such reference exists. However, keeping the reference
+	 * of "thisThread" will prevent the pool to send finalStop alert 
+	 * until the last reference the dispatchFn is destroyed.
+	 *
 	 */
 	DispatchFn start();
+
 
 	///Gets timeout for idle waiting
 	/**
@@ -188,11 +204,22 @@ public:
 	 */
 	static RefCntPtr<AbstractDispatchedFunction> clearQueueCmd;
 
+	unsigned int getMaxYieldRecursion() const {
+		return maxYieldRecursion;
+	}
+
+	ThreadPool& setMaxYieldRecursion(unsigned int v) {
+		maxYieldRecursion = v;
+		return *this;
+	}
+
+
 	private:
 		unsigned int maxThreads;
 		unsigned int maxQueue;
 		unsigned int idleTimeout;
 		unsigned int queueTimeout;
+		unsigned int maxYieldRecursion;
 		bool dispatchOnWait;
 		AlertFn threadStart;
 		AlertFn threadStop;
@@ -200,4 +227,11 @@ public:
 
 	};
 
+
+
+
+
+	
 }
+
+

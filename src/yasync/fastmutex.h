@@ -133,7 +133,7 @@ namespace yasync {
 			FastMutex &lk;
 			Slot sl;
 		public:
-			Async(FastMutex &lk) :lk(lk), sl(AlertFn::currentThread()) {
+			Async(FastMutex &lk) :lk(lk), sl(AlertFn::thisThread()) {
 				lk.addToQueue(&sl);
 			}
 			~Async() {
@@ -174,7 +174,7 @@ namespace yasync {
 		void lockSlow()
 		{
 			//setup waiting slot
-			Slot s(AlertFn::currentThread());
+			Slot s(AlertFn::thisThread());
 			//try to add to queue
 			if (addToQueue(&s)) {
 				//if added, repeatedly test notifier until it is notified

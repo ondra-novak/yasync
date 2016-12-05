@@ -54,6 +54,8 @@ namespace yasync {
 				signaled = false;
 				reason = 0;
 			}
+
+
 		protected:
 			AlertFn fwd;
 			bool signaled;
@@ -70,7 +72,7 @@ namespace yasync {
 	public:
 		///Create checkpoint.
 		/** Checkpoint will catch your alert and forward it to the current thread  */
-		Checkpoint() :AlertFn(new AlertMonitor(AlertFn::currentThread())) {}
+		Checkpoint() :AlertFn(new AlertMonitor(AlertFn::thisThread())) {}
 		///Create checkpoint and specify where to forward the alert
 		/** Checkpoint will catch your alert and forward it to specified alert function 
 		@param fn alert function where forward the alert
@@ -88,12 +90,10 @@ namespace yasync {
 		///Reset internal state, so the checkpoint can be reused
 		void reset() { get().reset(); }
 
+		using AlertFn::operator();
+
 		///Stop thread until the checkpoint becomes signaled
-		void wait() {
-			while (!get().isSignaled()) {
-				halt();
-			}
-		}
+		void wait();
 
 		///Stop thread until the checkpoint becomes signaled or specified timeout expires
 		/**
@@ -101,12 +101,18 @@ namespace yasync {
 		@retval true signaled
 		@retval false timeout
 		*/
-		bool wait(const Timeout &tm) {
-			while (!get().isSignaled()) {
-				if (sleep(tm)) return false;
-			}
-			return true;
-		}
+		bool wait(const Timeout &tm);
+
+		///Dispatch functions while thread waiting for alert
+		void dispatch();
+
+		///Dispatch functions while thread waiting for alert, you can specify a timeout
+		/**
+		@param tm timeout specification
+		@retval true signaled
+		@retval false timeout
+		*/
+		bool dispatch(const Timeout &tm);
 
 
 

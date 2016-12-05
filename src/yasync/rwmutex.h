@@ -49,7 +49,7 @@ namespace yasync {
 
 		///Create ticket
 		Ticket ticket() {
-			return Ticket(*this, AlertFn::currentThread(), false);
+			return Ticket(*this, AlertFn::thisThread(), false);
 		}
 
 		///Create ticket with custrom alert function
@@ -59,7 +59,7 @@ namespace yasync {
 
 		///Create ticket
 		Ticket ticketShared() {
-			return Ticket(*this, AlertFn::currentThread(), true);
+			return Ticket(*this, AlertFn::thisThread(), true);
 		}
 
 		///Create ticket with custrom alert function

@@ -48,7 +48,7 @@ namespace yasync {
 
 
 			~Ticket() {
-				if (!alerted.load(std::memory_order_release) && !removed.load(std::memory_order_release))
+				if (!alerted.load(std::memory_order_acquire) && !removed.load(std::memory_order_acquire))
 					queue.signoff(*this);
 			}
 
@@ -57,13 +57,13 @@ namespace yasync {
 			 * @retval true not alerted yet
 			 * @retval false alerted
 			 */
-			bool operator!() const {return !alerted.load(std::memory_order_release);}
+			bool operator!() const {return !alerted.load(std::memory_order_acquire);}
 			///Ask ticket whether is alerted
 			/**
 			 * @retval false not alerted yet
 			 * @retval true alerted
 			 */
-			operator bool() const {return alerted.load(std::memory_order_release);}
+			operator bool() const {return alerted.load(std::memory_order_acquire);}
 			bool operator==(bool x) const {return alerted == x;}
 			bool operator!=(bool x) const {return alerted != x;}
 
@@ -78,7 +78,7 @@ namespace yasync {
 
 		///Create ticket
 		Ticket ticket() {
-			return Ticket(*this,AlertFn::currentThread());
+			return Ticket(*this,AlertFn::thisThread());
 		}
 
 		///Create ticket with custrom alert function
@@ -193,6 +193,9 @@ namespace yasync {
 					}
 					if (x == nullptr)
 						return false;
+					
+					z->next = x->next;
+
 				}
 				t.removed.store(true,std::memory_order_release);
 			}

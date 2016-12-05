@@ -34,3 +34,5 @@
 src/tests/Debug/
 src/yasync/Debug/yasync.tlog/CL.command.1.tlog
 src/yasync/Debug/
+Release/
+src/tests/testimg.pgm

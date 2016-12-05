@@ -26,7 +26,7 @@ namespace yasync {
 				//otherwise - use standard way
 				lockSlow();
 
-				ownerThread = ThreadRef::currentThread();
+				ownerThread = ThreadRef::thisThread();
 				//set recursive count to 1
 				recursiveCount.store(1, std::memory_order_release);
 			}
@@ -50,12 +50,12 @@ namespace yasync {
 		*/
 
 		bool tryLock() {
-			ThreadRef cid = ThreadRef::currentThread();
+			ThreadRef cid = ThreadRef::thisThread();
 			//try lock 
 			if (FastMutex::tryLock()) {
 				//if success, set setup recursive count
 
-				ownerThread = ThreadRef::currentThread();
+				ownerThread = ThreadRef::thisThread();
 				//set recursive count to 1
 				recursiveCount.store(1, std::memory_order_release);
 
@@ -80,7 +80,7 @@ namespace yasync {
 		successes tryLocks). After these count matches, lock is released
 		*/
 		void unlock() {
-			ThreadRef cid = ThreadRef::currentThread();
+			ThreadRef cid = ThreadRef::thisThread();
 			//try lock 
 
 			if (ownerThread == cid && recursiveCount.load(std::memory_order_acquire) > 0) {
@@ -105,7 +105,7 @@ namespace yasync {
 		*/
 
 		unsigned int unlockSaveRecusion() {
-			ThreadRef cid = ThreadRef::currentThread();
+			ThreadRef cid = ThreadRef::thisThread();
 			if (cid != ownerThread) return 0;
 
 			unsigned int ret = recursiveCount.load(std::memory_order_acquire);
@@ -156,7 +156,7 @@ namespace yasync {
 		@retval false failure (this thread doesn't own the lock)
 		*/
 		bool setOwner(ThreadRef ref) {
-			ThreadRef cid = ThreadRef::currentThread();
+			ThreadRef cid = ThreadRef::thisThread();
 			if (ownerThread == cid) {
 				ownerThread = ref;
 				return true;
