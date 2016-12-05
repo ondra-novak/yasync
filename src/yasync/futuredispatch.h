@@ -324,5 +324,15 @@ namespace yasync {
 	};
 
 
+	template<typename T>
+	DispatchedFuture<T> operator >> (const Future<T> &future, _XNewThread) {
+		return future >> DispatchFn::newThread();
+	}
+
+	template<typename T>
+	DispatchedFuture<T> operator >> (const Future<T> &future, _XThisThread) {
+		return future >> DispatchFn::thisThread();
+	}
+
 
 }

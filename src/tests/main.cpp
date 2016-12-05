@@ -36,7 +36,7 @@ static unsigned int timeSlice = 0;
 
 class FNV1a {
 public:
-	unsigned long hash;
+	std::uint64_t hash;
 
 	FNV1a():hash(14695981039346656037UL) {}
 	void operator()(unsigned int b) {
@@ -70,6 +70,15 @@ int main(int , char **) {
 		yasync::halt();
 	};
 
+	tst.test("Dispatch", "testing") >> [](std::ostream &out) {
+		yasync::AlertFn fin = yasync::AlertFn::thisThread();
+		yasync::thisThread >> [&out, &fin] {
+			out << "testing";
+			fin();
+		};
+		yasync::haltAndDispatch();
+	};
+
 	tst.test("FastMutex", "400") >> [](std::ostream &out) {
 		unsigned int counter = 0;
 			yasync::FastMutex mx;
@@ -94,6 +103,65 @@ int main(int , char **) {
 		cgate.wait();
 		out << counter;
 	};
+
+	tst.test("Dispatch thread", "0,1,2,3,4,5,6,7,8,9,done") >> [](std::ostream &out) {
+		yasync::CountGate fin(10);
+		yasync::DispatchFn dt = yasync::DispatchFn::newDispatchThread();
+		for (unsigned int i = 0; i < 10; i++) {
+			dt >> [i, &out, &fin] {
+				out << i << ",";
+				fin();
+			};
+		}
+		fin.wait();
+		out << "done";
+	};
+	tst.test("Future.directRun", "42,1") >> [](std::ostream &out) {
+		yasync::Future<int> f;
+		f.getPromise().setValue(42);
+		std::uintptr_t myid = yasync::thisThreadId();
+		std::uintptr_t hid;
+		f >> [&](int x) {
+			out << x;
+			hid = yasync::thisThreadId();
+		};
+		out << "," << (myid == hid) ? 1 : 0;
+	};
+	tst.test("Future.inForeignThread", "42,1") >> [](std::ostream &out) {
+		yasync::Future<int> f = yasync::newThread >> [] {
+			yasync::sleep(100);
+			return 42;
+		};
+		
+		std::uintptr_t myid = yasync::thisThreadId();
+		std::uintptr_t hid;
+		f >> [&](int x) {
+			out << x;
+			hid = yasync::thisThreadId();
+		};
+		f.wait();
+		out << "," << (myid != hid) ? 1 : 0;
+	};
+	tst.test("Future.dispatchChain", "42,1,1,0") >> [](std::ostream &out) {
+		yasync::Future<int> f;
+		f.getPromise().setValue(42);
+		yasync::Checkpoint fin;
+		std::uintptr_t myid = yasync::thisThreadId();
+		std::uintptr_t hid1,hid2;
+		f >> yasync::newThread >>[&](int x) {
+			out << x;
+			hid1 = yasync::thisThreadId();
+		} >> [&] {
+			hid2 = yasync::thisThreadId();
+		} >> fin;
+		fin.wait();
+		out << "," << (myid != hid1) ? 1 : 0;
+		out << "," << (myid != hid2) ? 1 : 0;
+		out << "," << (hid1 != hid2) ? 1 : 0;
+	};
+
+
+
 	tst.test("Scheduler", "A:100, B:150, C:70, D:160") >> [](std::ostream &out) {
 		auto n = std::chrono::steady_clock::now();
 		std::chrono::steady_clock::time_point endA, endB, endC,endD, start = std::chrono::steady_clock::now();
@@ -168,23 +236,21 @@ int main(int , char **) {
 		finish.wait();
 		FNV1a hash;
 		{
-			std::ofstream f("testimg.pgm");
+	/*		std::ofstream f("testimg.pgm");
 			f << "P2" << std::endl;
 			f << sizeX << " " << sizeY << std::endl;
-			f << "256" << std::endl;
-			std::ostringstream tmp;
+			f << "256" << std::endl;*/
 			for (int i = 0; i < sizeX; i++) {
 				for (int j = 0; j < sizeY; j++) {
-					f << (int)buffer[i][j] << " ";
+//					f << (int)buffer[i][j] << " ";
 					hash(buffer[i][j]);
 				}
-				f << std::endl;
+//				f << std::endl;
 			}
 		}
 		out << hash.hash;
 	};
 
 
-
-		return tst.didFail()?1:0;
+	return tst.didFail()?1:0;
 }

@@ -147,6 +147,7 @@ namespace yasync {
 		if (!workerTrigger.notifyOne() && threadCount < cfg.getMaxThreads()) {
 			startThread();
 		}
+		return true;
 	}
 
 	void ThreadPoolImpl::finish() {
