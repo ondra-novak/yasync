@@ -8,9 +8,12 @@
 #include <deque>
 #include "pool.h"
 
+#include "condvar.h"
+
 #include "semaphore.h"
 #include "fastmutex.h"
 #include "dispatcher.h"
+#include "nulllock.h"
 
 using std::deque;
 namespace yasync {
@@ -28,7 +31,7 @@ namespace yasync {
 
 		DispatchFn createControl();
 
-		bool dispatch(const AbstractDispatcher::Fn &fn);
+		bool dispatch(const AbstractDispatcher::Fn &fn) throw();
 		void finish();
 
 		~ThreadPoolImpl() {
@@ -41,8 +44,8 @@ namespace yasync {
 	protected:
 		Config cfg;
 		FastMutex lk;
-		WaitQueueMTUnsafe workerTrigger;
-		WaitQueueMTUnsafe queueTrigger;
+		CondVar<NullLock> workerTrigger;
+		CondVar<NullLock> queueTrigger;
 		std::deque<AbstractDispatcher::Fn> queue;
 		unsigned int threadCount;
 		bool finishFlag;
@@ -80,8 +83,8 @@ namespace yasync {
 
 	ThreadPoolImpl::ThreadPoolImpl(const Config& cfg)
 		:cfg(cfg)
-		,workerTrigger(WaitQueueMTUnsafe::lifo)
-		,queueTrigger(WaitQueueMTUnsafe::fifo)
+		,workerTrigger(nullLock,true)
+		,queueTrigger(nullLock,false)
 		,threadCount(0),finishFlag(false) {
 
 	}
@@ -96,7 +99,7 @@ namespace yasync {
 		return queue.size() >= cfg.getMaxQueue();
 	}
 
-	bool ThreadPoolImpl::dispatch(const AbstractDispatcher::Fn& fn) {
+	bool ThreadPoolImpl::dispatch(const AbstractDispatcher::Fn& fn) throw()  {
 		LockScope<FastMutex> _(lk);
 		if (fn == ThreadPool::clearQueueCmd) {
 			queue.clear();
@@ -141,7 +144,7 @@ namespace yasync {
 		//push task to the thread
 		queue.push_back(fn);
 		//alert one worker. if none available, the create new one
-		if (!workerTrigger.alertOne() && threadCount < cfg.getMaxThreads()) {
+		if (!workerTrigger.notifyOne() && threadCount < cfg.getMaxThreads()) {
 			startThread();
 		}
 	}
@@ -151,7 +154,7 @@ namespace yasync {
 		//mark finish flag
 		finishFlag = true;
 		//release all waiting workers
-		workerTrigger.alertAll();
+		workerTrigger.notifyAll();
 
 	}
 
@@ -171,7 +174,7 @@ namespace yasync {
 			AbstractDispatcher::Fn fn = queue.front();
 			queue.pop_front();
 			//alert any waiting thread for empty queue
-			queueTrigger.alertOne();
+			queueTrigger.notifyOne();
 			//unlock pool - task will not interact with it
 			UnlockScope<FastMutex> _(lk);
 			//run task
@@ -195,7 +198,7 @@ public:
 		return res;
 	}
 	virtual DispatchFn getDispatch() throw() {
-		return static_cast<AbstractDispatcher *>(poolImpl);
+		return RefCntPtr<AbstractDispatcher>(poolImpl);
 	}
 
 	ThreadPoolImpl *poolImpl;
@@ -250,7 +253,7 @@ void ThreadPoolImpl::runWorkerCycle() throw() {
 			AbstractDispatcher::Fn fn = queue.front();
 			queue.pop_front();
 			//alert any waiting thread for empty queue
-			queueTrigger.alertOne();
+			queueTrigger.notifyOne();
 			//unlock pool - task will not interact with it
 			UnlockScope<FastMutex> _(lk);
 			//run task

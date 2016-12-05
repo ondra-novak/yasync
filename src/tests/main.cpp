@@ -25,12 +25,28 @@
 #include "../yasync/futuredispatch.h"
 #include "../yasync/checkpoint.h"
 #include "../yasync/pool.h"
+#include "../yasync/weakref.h"
 
 
 
 
 
 static unsigned int timeSlice = 0;
+
+
+class FNV1a {
+public:
+	unsigned long hash;
+
+	FNV1a():hash(14695981039346656037UL) {}
+	void operator()(unsigned int b) {
+		hash = hash ^ (b & 0xFF);
+		if (hash == 0) hash = 14695981039346656037UL;
+		hash = hash * 1099511628211L;
+	}
+
+};
+
 
 int main(int , char **) {
 	TestSimple tst;
@@ -52,30 +68,6 @@ int main(int , char **) {
 			fin();
 		};
 		yasync::halt();
-	};
-	tst.test("Thread.alert", "testing") >> [](std::ostream &out) {
-		bool done = false;
-		yasync::AlertFn fin = yasync::AlertFn::thisThread() >> [&done] {done = true; };
-		yasync::newThread >> [&out, &fin] {
-			out << "testing";
-			fin();
-		};
-		while (!done) {
-			yasync::halt();
-		}
-	};
-	tst.test("Thread.alert", "42") >> [](std::ostream &out) {
-		bool done = false;
-		uintptr_t reason;
-		yasync::AlertFn fin = yasync::AlertFn::thisThread()
-					>> [&done, &reason](uintptr_t r) {reason = r; done = true; };
-		yasync::newThread >> [&out, &fin] {
-			fin(42);
-		};
-		while (!done) {
-			yasync::halt();
-		}
-		out << reason;
 	};
 
 	tst.test("FastMutex", "400") >> [](std::ostream &out) {
@@ -131,12 +123,12 @@ int main(int , char **) {
 			<< ", D:" << ((std::chrono::duration_cast<std::chrono::milliseconds>(endD - start).count() + 5) / 10);
 	};
 
-	tst.test("Pool", "A:100, B:150, C:70, D:160") >> [](std::ostream &out) {
+	tst.test("Pool", "10816640488088513931") >> [](std::ostream &out) {
 		std::vector<std::vector<unsigned char> > buffer;
 		yasync::ThreadPool poolCfg;
 		yasync::Checkpoint finish;
-		double left = -1.154;
-		double right = -1.155;
+		double left = -1.153;
+		double right = -1.154;
 		double top = 0.201;
 		double bottom = 0.202;
 		static const unsigned int sizeX = 2000;
@@ -156,7 +148,7 @@ int main(int , char **) {
 						double x = left + ((right - left)*(j / double(sizeX)));
 						double newRe = 0, newIm = 0, oldRe = 0, oldIm = 0;
 						int i;
-						for (i = 0; i < 256; i++)
+						for (i = 0; i < 255; i++)
 						{
 							oldRe = newRe;
 							oldIm = newIm;
@@ -168,28 +160,28 @@ int main(int , char **) {
 							newRe = oldRe2 - oldIm2+ x;
 							newIm = 2 * oldRe * oldIm + y;
 						}
-						row[j] = (unsigned char)i;				
+						row[j] = (unsigned char)i;
 					}
 				};
 			}
 		}
 		finish.wait();
-		unsigned char xchk = 0;
+		FNV1a hash;
 		{
 			std::ofstream f("testimg.pgm");
 			f << "P2" << std::endl;
 			f << sizeX << " " << sizeY << std::endl;
-			f << "255" << std::endl;
+			f << "256" << std::endl;
 			std::ostringstream tmp;
 			for (int i = 0; i < sizeX; i++) {
 				for (int j = 0; j < sizeY; j++) {
 					f << (int)buffer[i][j] << " ";
-					xchk ^= (int)buffer[i][j];
+					hash(buffer[i][j]);
 				}
 				f << std::endl;
 			}
 		}
-		out << xchk;	
+		out << hash.hash;
 	};
 
 

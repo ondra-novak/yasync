@@ -246,7 +246,7 @@ auto operator >> (_XNewThread, const Fn &fn) -> typename RunThreadFn<Fn, typenam
 }
 
 template<typename Fn>
-auto operator >> (_XThisThread, const Fn &fn) {
+auto operator >> (_XThisThread, const Fn &fn) -> decltype(DispatchFn::thisThread() >> fn) {
 	return DispatchFn::thisThread() >> fn;
 }
 

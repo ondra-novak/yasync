@@ -112,35 +112,6 @@ public:
 	bool operator!=(const AlertFn &other) const { return obj != other.obj; }
 
 	
-	template<typename Fn>
-	auto operator >> (const Fn &fn) -> typename ChainInfo<typename std::result_of<Fn()>::type >::Ret {		
-		class F : public AbstractAlertFunction {
-		public:
-			F(const Fn &fn, RefCntPtr<AbstractAlertFunction> a) :fn(fn), a(a) {}
-			virtual void wakeUp(const std::uintptr_t *reason) throw() {
-				fn();
-				if (a != nullptr) a->wakeUp(reason);
-			}
-			Fn fn;
-			RefCntPtr<AbstractAlertFunction> a;
-		};
-		return AlertFn(new F(fn, obj));
-	}
-
-	template<typename Fn>
-	auto operator >> (const Fn &fn) -> typename ChainInfo<typename std::result_of<Fn(std::uintptr_t)>::type >::Ret {
-		class F : public AbstractAlertFunction {
-		public:
-			F(const Fn &fn, RefCntPtr<AbstractAlertFunction> a) :fn(fn), a(a) {}
-			virtual void wakeUp(const std::uintptr_t *reason) throw() {
-				fn(reason?*reason:0);
-				if (a != nullptr) a->wakeUp(reason);
-			}
-			Fn fn;
-			RefCntPtr<AbstractAlertFunction> a;
-		};
-		return AlertFn(new F(fn, obj));
-	}
 
 protected:
 	RefCntPtr<AbstractAlertFunction> obj;

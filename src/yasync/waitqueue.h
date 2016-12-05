@@ -259,29 +259,6 @@ namespace yasync {
 
 	};
 
-	///Implements final wait queue without locks, so it must be controlled by single thread at once (under locks)
-	class WaitQueueMTUnsafe: public WaitQueue<WaitQueueMTUnsafe> {
-	public:
-
-		WaitQueueMTUnsafe(QueueMode mode):WaitQueue<WaitQueueMTUnsafe>(mode) {}
-
-		using WaitQueue<WaitQueueMTUnsafe>::alertOne;
-		using WaitQueue<WaitQueueMTUnsafe>::alertAll;
-		using WaitQueue<WaitQueueMTUnsafe>::alert;
-
-	protected:
-		friend class WaitQueue<WaitQueueMTUnsafe>;
-
-		void onSubscribe(typename WaitQueue<WaitQueueMTUnsafe>::Ticket &t) {
-			add(t);
-		}
-		void onSignoff(typename WaitQueue<WaitQueueMTUnsafe>::Ticket &t) {
-			remove(t);
-		}
-
-
-	};
-
 
 	
 
