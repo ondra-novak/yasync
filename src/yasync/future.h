@@ -493,6 +493,8 @@ class Promise {
 
 public:
 
+	Promise() :value(nullptr) {}
+
 	Promise(RefCntPtr<typename Future<T>::Internal> value):value(RefCntPtr<Internal>::staticCast(value)) {}
 
 	void setValue(const T &v) const {
