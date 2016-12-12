@@ -177,16 +177,41 @@ template<typename T> class Future {
 			*x = obs;
 		}
 
-		void removeObserver(AbstractPromiseObserver<T> *obs) const throw() {
+		bool callObserver(AbstractPromiseObserver<T> *obs) const throw() {
+			LockScope<FastMutex> _(lk);
+			if (state == resolved) {
+				UnlockScope<FastMutex> _(lk);
+				if (exception != nullptr) (*obs)(exception);
+				else (*obs)(*value);
+				return true;
+			}
+			return false;
+		}
+
+		bool addObserverIfPending(AbstractPromiseObserver<T> *obs) const throw() {
+			LockScope<FastMutex> _(lk);
+			if (state == resolved) {
+				return false;
+			}
+			AbstractPromiseObserver<T> **x = &firstObserver;
+			while (*x != nullptr) {
+				x = &(*x)->next;
+			}
+			*x = obs;
+			return true;
+		}
+
+		bool removeObserver(AbstractPromiseObserver<T> *obs) const throw() {
 			LockScope<FastMutex> _(lk);
 			AbstractPromiseObserver<T> **x = &firstObserver;
 			while (*x != nullptr) {
 				if (*x == obs) {
 					*x = obs->next;
-					return;
+					return true;
 				}
 				x = &(*x)->next;
 			}
+			return false;
 		}
 
 		void addRefPromise() throw() {
@@ -289,20 +314,37 @@ template<typename T> class Future {
 	
 	///Determines, whether the future object is connected with a promise object
 	/**
-	  @retval true Yes, there is a pending promise object, so the caller
-	  can safety wait on resolution. Function also returns true in case that
-	  the future is already resolved
+	  @retval true Yes, there is a pending or resolved.
 	  @retval false No, there is no pending promise object. The future
 	  variable is either constructed with nullptr or the function
 	  getPromise wasn't called yet. 
 	  */
 
-	bool hasPromise() const {return value->hasPromise();}
+	bool hasPromise() const {return value != nullptr && value->hasPromise();}
+
+	///Pending future is future which is currently waiting for completion
+	/**
+	  Such future must be initialized, has promise and unresolved
+	  @retval true future is pending (i.e. waiting for result)
+	  @retval false future is in other state (resolved or has not promise or is null)
+
+	  For pending futures it is worth to add observer. Because the status can
+	  change anytime during adding the observer, it still doesn't garantee that the
+	  observer will be called in the source thread.
+	 */
+	bool isPending() const {
+		return value->hasPromise() && value->getState() != resolved;
+	}
 
 	///Determines, whether the future is resolved
 	/** The future is resolved when the value is available after all
-	observers are processed */
-	bool isResolved() const { return value->getState() == resolved; }
+	observers are processed 
+	
+	@retval true future is resolved
+	@retval false future is not resolved. So it can be either pending or null 
+	or the function getPromise was not called yet
+	*/
+	bool isResolved() const { return value->hasPromise() && value->getState() == resolved; }
 
 	///Retrieve value when future is resolved
 	/** @retval valid pointer to value (which is valid until the last future
@@ -334,6 +376,30 @@ template<typename T> class Future {
 	void addObserver(AbstractPromiseObserver<T> *obs) const {
 		value->addObserver(obs);
 	}
+
+	///adds observer if future is pending.
+	/**
+	This garantee, that observer will not called in current thread. Note that
+	observer can be rejected if status changes during the process
+	@param obs observer to add
+	@retval true added
+	@retval false the future is already resolved
+	*/
+	bool addObserverIfPending(AbstractPromiseObserver<T> *obs) const {
+		return value->addObserverIfPending(obs);
+	}
+
+	///Calls observer if future is resolved
+	/**
+	Observer will be called only when future is resolved, otherwise, function fails 
+	with false status
+	@retval true observer called
+	@retval false future is not resolved
+	*/
+	bool callObserver(AbstractPromiseObserver<T> *obs) const {
+		return value->callObserver(obs);
+	}
+
 	///Removes observer before the future is resolved
 	/**
 	@param obs observer to remove. Pointer is subject of comparison
@@ -341,7 +407,7 @@ template<typename T> class Future {
 	@retval false not found,or already resolved
 	*/
 	bool removeObserver(AbstractPromiseObserver<T> *obs) const {
-		value->removeObserver(obs);
+		return value->removeObserver(obs);
 	}
 
 	///This observer generates alert when the Future is resolved. Value is ignored, you have to retrieve it from the Future object	
@@ -524,8 +590,26 @@ public:
 		v.addObserver(new Observer(me));
 	}
 
+	
+	///Sets exception to specified exception ptr
 	void setException(const std::exception_ptr &p) const {
 		value->resolve(p);
+	}
+
+	///Sets exception using current exception
+	void setException() const {
+		value->resolve(std::current_exception());
+	}
+
+	///Sets exception to specified object
+	template<typename T>
+	void setException(const T &exp) const throw() {
+		try {
+			throw exp;
+		}
+		catch (...) {
+			value->resolve(std::current_exception());
+		}
 	}
 
 
