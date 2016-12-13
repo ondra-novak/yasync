@@ -306,6 +306,32 @@ template<typename T> class Future {
 	/** You can use such variable for assignment only */
 	Future(std::nullptr_t) {}
 
+	///Creates already resolved future
+	/** If one need a shortcut to convert value to future value, this is faster way. It constructs future,
+	 * which has already a value
+	 * @param val value of the future
+	 */
+	explicit Future(const T &val):value(new Internal) {
+		getPromise().setValue(val);
+	}
+	///Creates already resolved future
+	/** If one need a shortcut to convert value to future value, this is faster way. It constructs future,
+	 * which has already a value
+	 * @param val value of the future
+	 */
+	explicit Future(T &&val):value(new Internal) {
+		getPromise().setValue(std::move(val));
+	}
+
+
+	///Converts exception to Future which is resolved by this exception
+	template<typename X>
+	static Future exception(const X &val) {
+		Future f;
+		f.getPromise().setException(val);
+		return f;
+	}
+
 	///Retrieve promise 
 	/** You should store the result for resolving. Destroying the promise
 	object without resolving causes resolvion of the promise with 
@@ -415,12 +441,12 @@ template<typename T> class Future {
 	public:
 		AlertObserver(const AlertFn &alert) :alert(alert),alerted(false) {}
 		virtual void operator()(const T &) throw() {
-			alert();
 			alerted = true;
+			alert();
 		}
 		virtual void operator()(const std::exception_ptr &) throw() {
-			alert();
 			alerted = true;
+			alert();
 		}
 		AlertFn alert;
 		bool alerted;
@@ -602,8 +628,8 @@ public:
 	}
 
 	///Sets exception to specified object
-	template<typename T>
-	void setException(const T &exp) const throw() {
+	template<typename X>
+	void setException(const X &exp) const throw() {
 		try {
 			throw exp;
 		}
@@ -612,6 +638,8 @@ public:
 		}
 	}
 
+	bool operator==(const Promise<T> &other) const {return value == other.value;}
+	bool operator!=(const Promise<T> &other) const {return value != other.value;}
 
 protected:
 	RefCntPtr<Internal> value;
