@@ -454,7 +454,7 @@ template<typename T> class Future {
 			AlertObserver obs(AlertFn::thisThread());
 			addObserver(&obs);
 			while (!obs.alerted)
-				if (!sleep(tm)) {
+				if (sleep(tm)) {
 					removeObserver(&obs);
 					return false;
 				}

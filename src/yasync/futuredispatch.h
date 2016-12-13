@@ -305,11 +305,11 @@ namespace yasync {
 	template<typename Fn, typename RetV> 
 	class DispatchedFunction {
 	public:
-		typedef Future<RetV> RetT;
+		typedef typename _hlp::FutureHandlerReturn<Void, RetV >::T RetT;
 
 		static RetT dispatch(AbstractDispatcher *disp, const Fn &fn) {
-			Future<RetV> f;
-			Promise<RetV> p = f.getPromise();
+			RetT f;
+			auto p = f.getPromise();
 			auto fnx = [fn,p] {
 				try {
 					p.setValue(fn());
