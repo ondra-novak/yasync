@@ -784,7 +784,7 @@ public:
 		delete this;
 	}
 	virtual void operator()(const std::exception_ptr &exception) throw() {
-		promise.setValue(exception);
+		promise.setException(exception);
 		delete this;
 	}
 
