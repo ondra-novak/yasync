@@ -54,6 +54,8 @@ class AlertFn
 {
 	template<typename> struct ChainInfo {	typedef AlertFn Ret;};
 public:
+
+	AlertFn() {}
 	///Construct AlertFn using existing AbstractAlertFunction object
 	/** it is ok to construct AlertFn with nullptr. Such alert variable will not generate alert */
 	AlertFn(RefCntPtr<AbstractAlertFunction> obj):obj(obj) {}
